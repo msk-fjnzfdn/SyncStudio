@@ -1,0 +1,1 @@
+alter table "user" add column yandex_id varchar(250) unique;

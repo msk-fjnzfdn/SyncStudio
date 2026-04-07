@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}войти — SyncStudio{% endblock %}
+
+{% block content %}
+<div class="login-wrap">
+  <div class="login-left">
+    <div class="login-brand">
+      <span class="brand-prefix">//</span>
+      <h1>sync<br>studio</h1>
+      <p class="brand-sub">платформа для совместного<br>написания кода в реальном времени</p>
+    </div>
+    <div class="login-features">
+      <div class="feature-line"><span class="dot"></span>трансляция кода учителя</div>
+      <div class="feature-line"><span class="dot"></span>просмотр и редактура кода учеников</div>
+      <div class="feature-line"><span class="dot"></span>запуск через WebAssembly</div>
+    </div>
+  </div>
+
+  <div class="login-right">
+    <div class="login-card">
+      <div class="card-tag">// авторизация</div>
+      <h2>Добро пожаловать</h2>
+      <p class="login-desc">Войдите через Яндекс чтобы продолжить</p>
+
+      <a href="/auth/login" class="btn-yandex">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M13.542 2H10.46C6.923 2 5 3.923 5 7.46v9.08C5 20.077 6.923 22 10.46 22h3.082C17.077 22 19 20.077 19 16.54V7.46C19 3.923 17.077 2 13.542 2zm-1.5 15.5h-1.5v-5.25H9.5v-1.5h1.042V9.5c0-1.657 1.343-3 3-3h.958v1.5h-.958c-.828 0-1.5.672-1.5 1.5v1.25h2.458v1.5h-2.458V17.5z" fill="currentColor"/>
+        </svg>
+        Войти через Яндекс ID
+      </a>
+
+      <div class="login-footer">
+        <span>нет аккаунта?</span>
+        <span>он создастся автоматически при первом входе</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

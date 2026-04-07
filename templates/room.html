@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}комната {{ room_id }} — SyncStudio{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/room.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="room-layout" data-role="{{ role }}" data-room="{{ room_id }}" data-user="{{ user_id }}">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span class="sidebar-tag">// {{ room_id }}</span>
+            {% if role == 'teacher' %}
+            <span class="role-pill teacher">учитель</span>
+            {% else %}
+            <span class="role-pill student">ученик</span>
+            {% endif %}
+        </div>
+
+        <div class="lang-selector">
+            <label>язык</label>
+            <div class="lang-btns">
+                <button class="lang-btn active" data-lang="python">Python</button>
+                <button class="lang-btn" data-lang="javascript">JS</button>
+                <button class="lang-btn" data-lang="cpp">C++</button>
+            </div>
+        </div>
+
+        {% if role == 'teacher' %}
+        <div class="sidebar-section">
+            <div class="section-label">// ученики онлайн</div>
+            <div class="students-list" id="studentsList">
+                <div class="no-students">нет подключённых учеников</div>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="section-label">// просмотр</div>
+            <div class="viewing-info" id="viewingInfo">
+                <span class="viewing-none">никто не выбран</span>
+            </div>
+            <button class="btn-stop-view" id="stopViewBtn" style="display:none">
+                ✕ перестать смотреть
+            </button>
+        </div>
+        {% endif %}
+
+        {% if role == 'teacher' %}
+        <div class="sidebar-section" style="padding-top:0.5rem">
+            <a href="/room/{{ room_id }}/settings"
+               style="display:block;width:100%;padding:7px 8px;background:var(--bg3);
+            border:1px solid var(--border2);border-radius:4px;
+            font-size:0.72rem;color:var(--text2);text-align:center;
+            transition:all 0.15s"
+               onmouseover="this.style.borderColor='var(--border2)';this.style.color='var(--text)'"
+               onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+                ⚙ настройки комнаты
+            </a>
+        </div>
+        {% endif %}
+
+        <div class="sidebar-section sidebar-bottom">
+            <div class="ws-status" id="wsStatus">
+                <span class="dot disconnected"></span>
+                <span>отключено</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main editor area -->
+    <div class="editor-area">
+        {% if role == 'teacher' %}
+        <!-- Teacher: two editors (own + student view) -->
+        <div class="editor-tabs">
+            <button class="tab-btn active" data-tab="own">мой код</button>
+            <button class="tab-btn" data-tab="student" id="studentTab" style="display:none">
+                код ученика: <span id="studentTabName">—</span>
+            </button>
+        </div>
+
+        <div class="editor-pane active" id="paneOwn">
+            <div class="editor-topbar">
+                <span class="file-name" id="ownFileName">main.py</span>
+                <div class="editor-actions">
+                    <button class="btn-run" id="runOwnBtn">
+                        <span class="run-icon">▶</span> запустить
+                    </button>
+                </div>
+            </div>
+            <div class="monaco-wrap" id="ownEditor"></div>
+            <div class="output-panel" id="ownOutput">
+                <div class="output-header">// вывод</div>
+                <pre class="output-content" id="ownOutputContent">готов к запуску...</pre>
+            </div>
+        </div>
+
+        <div class="editor-pane" id="paneStudent">
+            <div class="editor-topbar">
+                <span class="file-name" id="studentFileName">—</span>
+                <div class="editor-actions">
+                    <button class="btn-save-student" id="saveStudentBtn">
+                        ✓ сохранить правки
+                    </button>
+                </div>
+            </div>
+            <div class="monaco-wrap" id="studentEditor"></div>
+        </div>
+
+        {% else %}
+        <!-- Student: own editor + teacher broadcast -->
+        <div class="editor-tabs">
+            <button class="tab-btn active" data-tab="own">мой код</button>
+            <button class="tab-btn" data-tab="teacher">код учителя</button>
+        </div>
+
+        <div class="editor-pane active" id="paneOwn">
+            <div class="editor-topbar">
+                <span class="file-name" id="ownFileName">main.py</span>
+                <div class="editor-actions">
+                    <button class="btn-run" id="runOwnBtn">
+                        <span class="run-icon">▶</span> запустить
+                    </button>
+                </div>
+            </div>
+            <div class="monaco-wrap" id="ownEditor"></div>
+            <div class="output-panel" id="ownOutput">
+                <div class="output-header">// вывод</div>
+                <pre class="output-content" id="ownOutputContent">готов к запуску...</pre>
+            </div>
+        </div>
+
+        <div class="editor-pane" id="paneTeacher">
+            <div class="editor-topbar">
+                <span class="file-name">учитель — live</span>
+                <span class="live-badge" id="liveBadge">● live</span>
+            </div>
+            <div class="monaco-wrap" id="teacherEditor"></div>
+            <div class="output-panel" id="teacherOutput">
+                <div class="output-header">// вывод учителя</div>
+                <pre class="output-content" id="teacherOutputContent">ожидание запуска...</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const ROOM_ID = "{{ room_id }}";
+    const ROLE = "{{ role }}";
+    const USER_ID = "{{ user_id }}";
+    const WS_HOST = window.location.host;
+</script>
+<script src="{{ url_for('static', path='js/pyodide-runner.js') }}"></script>
+<script src="{{ url_for('static', path='js/room.js') }}"></script>
+{% endblock %}

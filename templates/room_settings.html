@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}настройки — {{ room.name }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+<style>
+.settings-wrap { max-width: 700px; margin: 0 auto; padding: 3rem 2rem; }
+.settings-section {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem;
+}
+.section-title {
+  font-size: 0.7rem; color: var(--green); letter-spacing: 0.1em;
+  margin-bottom: 1.25rem;
+}
+.members-list { display: flex; flex-direction: column; gap: 4px; }
+.member-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-radius: 4px;
+  background: var(--bg3); font-size: 0.8rem;
+}
+.member-name { color: var(--text); }
+.member-email { color: var(--text3); font-size: 0.72rem; }
+.btn-kick {
+  background: none; border: 1px solid rgba(232,85,85,0.25);
+  color: var(--text3); padding: 3px 10px; border-radius: 4px;
+  font-size: 0.7rem; transition: all 0.15s;
+}
+.btn-kick:hover { border-color: var(--red); color: var(--red); }
+.add-user-row {
+  display: flex; gap: 8px; margin-top: 1rem;
+}
+.add-user-row input {
+  flex: 1; padding: 8px 12px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); border-radius: var(--radius);
+  font-size: 0.8rem; outline: none; font-family: var(--mono);
+}
+.add-user-row input:focus { border-color: var(--green); }
+.btn-add {
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--green); padding: 8px 16px;
+  border-radius: var(--radius); font-size: 0.8rem;
+  transition: all 0.15s;
+}
+.btn-add:hover { border-color: var(--green); }
+.danger-zone {
+  border-color: rgba(232,85,85,0.2) !important;
+}
+.danger-zone .section-title { color: var(--red); }
+.btn-delete {
+  background: none; border: 1px solid rgba(232,85,85,0.3);
+  color: var(--red); padding: 9px 18px;
+  border-radius: var(--radius); font-size: 0.8rem;
+  transition: all 0.15s; width: 100%;
+}
+.btn-delete:hover { background: rgba(232,85,85,0.08); }
+.msg { font-size: 0.75rem; margin-top: 0.5rem; min-height: 1em; }
+.msg.ok  { color: var(--green); }
+.msg.err { color: var(--red); }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.75rem; color: var(--text3); margin-bottom: 2rem;
+  transition: color 0.15s;
+}
+.back-link:hover { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-wrap">
+  <a href="/room/{{ room_id }}" class="back-link">← вернуться в комнату</a>
+
+  <div style="margin-bottom:2rem">
+    <span class="page-tag">// настройки</span>
+    <h1 class="page-title">{{ room.name }}</h1>
+  </div>
+
+  <!-- Основные настройки -->
+  <div class="settings-section">
+    <div class="section-title">// основные</div>
+    <form id="settingsForm">
+      <div class="form-group">
+        <label>название</label>
+        <input type="text" name="name" value="{{ room.name }}" required>
+      </div>
+      <div class="form-group">
+        <label>макс. участников <span class="hint">(до 39)</span></label>
+        <input type="number" name="max_members" value="{{ room.max_members }}" min="2" max="39" required>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem">
+        <button type="submit" class="btn-submit">сохранить →</button>
+      </div>
+      <div class="msg" id="settingsMsg"></div>
+    </form>
+  </div>
+
+  <!-- Участники -->
+  <div class="settings-section">
+    <div class="section-title">// участники</div>
+    <div class="members-list" id="membersList">
+      <div style="font-size:0.75rem;color:var(--text3)">загрузка...</div>
+    </div>
+    <div class="add-user-row">
+      <input type="text" id="addUsername" placeholder="username ученика" autocomplete="off">
+      <button class="btn-add" id="addUserBtn">+ добавить</button>
+    </div>
+    <div class="msg" id="addMsg"></div>
+  </div>
+
+  <!-- Опасная зона -->
+  <div class="settings-section danger-zone">
+    <div class="section-title">// удалить комнату</div>
+    <p style="font-size:0.78rem;color:var(--text2);margin-bottom:1rem">
+      Удаление необратимо. Все участники будут отключены.
+    </p>
+    <button class="btn-delete" id="deleteBtn">удалить комнату</button>
+    <div class="msg" id="deleteMsg"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ROOM_ID = {{ room_id }};
+
+// ── Загрузить участников ──────────────────────────────────
+async function loadMembers() {
+  const res = await fetch(`/room/settings/${ROOM_ID}`, { credentials: 'include' });
+  const data = await res.json();
+  if (!data.ok) return;
+
+  const list = document.getElementById('membersList');
+  if (!data.members.length) {
+    list.innerHTML = '<div style="font-size:0.75rem;color:var(--text3)">нет участников</div>';
+    return;
+  }
+  list.innerHTML = data.members.map(m => `
+    <div class="member-row" data-id="${m.id}">
+      <div>
+        <span class="member-name">${m.username}</span>
+        <span class="member-email"> — ${m.email}</span>
+      </div>
+      <button class="btn-kick" onclick="kickUser(${m.id}, '${m.username}')">
+        удалить
+      </button>
+    </div>
+  `).join('');
+}
+
+// ── Сохранить настройки ───────────────────────────────────
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('settingsMsg');
+  const data = Object.fromEntries(new FormData(e.target));
+  data.max_members = parseInt(data.max_members);
+
+  const res = await fetch(`/room/settings/${ROOM_ID}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+    credentials: 'include',
+  });
+  const json = await res.json();
+  msg.className = 'msg ' + (res.ok ? 'ok' : 'err');
+  msg.textContent = res.ok ? '✓ сохранено' : (json.detail || 'ошибка');
+});
+
+// ── Добавить ученика ──────────────────────────────────────
+document.getElementById('addUserBtn').addEventListener('click', async () => {
+  const input = document.getElementById('addUsername');
+  const msg   = document.getElementById('addMsg');
+  const username = input.value.trim();
+  if (!username) return;
+
+  const res = await fetch(`/room/add_user_to_room/${ROOM_ID}?username=${encodeURIComponent(username)}`, {
+    method: 'PUT',
+    credentials: 'include',
+  });
+  const json = await res.json();
+  msg.className = 'msg ' + (res.ok ? 'ok' : 'err');
+  msg.textContent = res.ok
+    ? `✓ ${json.username} добавлен`
+    : (json.detail || 'ошибка');
+
+  if (res.ok) { input.value = ''; loadMembers(); }
+});
+
+// Enter в поле добавления
+document.getElementById('addUsername').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('addUserBtn').click();
+});
+
+// ── Удалить участника ─────────────────────────────────────
+async function kickUser(userId, username) {
+  if (!confirm(`Удалить ${username} из комнаты?`)) return;
+  // TODO: добавить эндпоинт remove_user_from_room если нужно
+  // Пока просто убираем из DOM
+  document.querySelector(`[data-id="${userId}"]`)?.remove();
+}
+
+// ── Удалить комнату ───────────────────────────────────────
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+  if (!confirm('Удалить комнату? Это действие нельзя отменить.')) return;
+  const msg = document.getElementById('deleteMsg');
+
+  const res = await fetch(`/room/${ROOM_ID}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const json = await res.json();
+  if (res.ok) {
+    window.location = '/dashboard';
+  } else {
+    msg.className = 'msg err';
+    msg.textContent = json.detail || 'ошибка удаления';
+  }
+});
+
+// ── init ──────────────────────────────────────────────────
+loadMembers();
+</script>
+{% endblock %}

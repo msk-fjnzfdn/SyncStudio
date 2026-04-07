@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}комнаты — SyncStudio{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dash-wrap">
+  <div class="dash-header">
+    <div>
+      <span class="page-tag">// dashboard</span>
+      <h1 class="page-title">Мои комнаты</h1>
+    </div>
+    {% if is_staff %}
+    <button class="btn-create" id="openModal">
+      <span class="plus">+</span> создать комнату
+    </button>
+    {% endif %}
+  </div>
+
+  {% if is_staff %}
+  <div class="role-badge staff">
+    <span class="dot"></span>
+    {% if is_admin %}администратор{% else %}учитель{% endif %}
+  </div>
+  {% else %}
+  <div class="role-badge student">
+    <span class="dot"></span>ученик
+  </div>
+  {% endif %}
+
+  <div class="rooms-grid" id="roomsGrid">
+    {% if rooms %}
+      {% for room in rooms %}
+      <div class="room-card" onclick="window.location='/room/{{ room.room_id }}'">
+        <div class="room-card-top">
+          <span class="room-index">{{ '%02d' % loop.index0 }}</span>
+          <span class="room-status online"></span>
+        </div>
+        <div class="room-name">{{ room.room_id }}</div>
+        <div class="room-meta">
+          <span>комната</span>
+          <span class="arrow-right">→</span>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">[ ]</div>
+        <p>Нет доступных комнат</p>
+        {% if is_staff %}
+        <p class="empty-sub">Создайте первую комнату</p>
+        {% else %}
+        <p class="empty-sub">Ждите пока учитель добавит вас</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_staff %}
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-tag">// новая комната</span>
+      <button class="modal-close" id="closeModal">✕</button>
+    </div>
+    <form id="createRoomForm">
+      <div class="form-group">
+        <label>название комнаты</label>
+        <input type="text" name="name" placeholder="python-basics-01" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>макс. участников <span class="hint">(до 39)</span></label>
+        <input type="number" name="max_members" min="2" max="39" value="20" required>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="cancelBtn">отмена</button>
+        <button type="submit" class="btn-submit">создать →</button>
+      </div>
+    </form>
+    <div class="form-message" id="formMessage"></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
+{% endblock %}

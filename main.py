@@ -1,204 +1,161 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
-from fastapi.middleware.wsgi import WSGIMiddleware
-from pydantic import BaseModel
-from typing import Optional
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base, joinedload
-from sqlalchemy import select
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, Cookie
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, RedirectResponse
 from contextlib import asynccontextmanager
 
-from database import User, Room, PersonRoom, init_db
-from auth_utils import decode_token
-from flask_auth import flask_app
-
-ASYNC_DATABASE_URL = "sqlite+aiosqlite:///./app.db"
-
-async_engine = create_async_engine(ASYNC_DATABASE_URL, connect_args={"check_same_thread": False})
-AsyncSessionLocal = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
-
-
-async def get_db():
-    async with AsyncSessionLocal() as db:
-        yield db
+from database import init_pool, close_pool, get_conn, queries
+import autentification
+import room
+from room_manager import RoomManager
+from dependencies import get_current_user
+from jwt_utils import decode_jwt
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    await init_pool()
     yield
-
-app = FastAPI(title="Room API", version="3.0.0", lifespan=lifespan)
-
-
-async def current_user(
-    authorization: str = Header(...),
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Нет токена")
-    payload = decode_token(authorization[7:])
-    if not payload:
-        raise HTTPException(401, "Невалидный токен")
-    result = await db.execute(select(User).filter(User.id == int(payload["sub"])))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(404, "Пользователь не найден")
-    return user
+    await close_pool()
 
 
-class RoomCreate(BaseModel):
-    name: str
-    max_members: int = 10
+app = FastAPI(lifespan=lifespan)
 
-class RoomUpdate(BaseModel):
-    name: Optional[str] = None
-    max_members: Optional[int] = None
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-class AddUser(BaseModel):
-    user_id: int
-
-class FileUpdate(BaseModel):
-    file: str
+app.include_router(autentification.router)
+app.include_router(room.router)
 
 
+# ── Page routes ───────────────────────────────────────────────
 
-@app.get("/rooms", tags=["Rooms"])
-async def list_rooms(db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(Room).options(joinedload(Room.members)))
-    rooms = result.unique().scalars().all()
-    return [
-        {"id": r.id, "name": r.name, "max_members": r.max_members, "members_count": len(r.members)}
-        for r in rooms
-    ]
-
-
-@app.post("/rooms", tags=["Rooms"], status_code=201)
-async def create_room(body: RoomCreate, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    room = Room(name=body.name, max_members=body.max_members)
-    db.add(room)
-    await db.commit()
-    await db.refresh(room)
-    db.add(PersonRoom(user_id=user.id, room_id=room.id))
-    await db.commit()
-    return {"id": room.id, "name": room.name, "max_members": room.max_members}
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    # Если уже залогинен — редирект на дашборд
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            decode_jwt(token)
+            return RedirectResponse("/dashboard")
+        except Exception:
+            pass
+    return templates.TemplateResponse(request, "login.html")
 
 
-@app.get("/rooms/{room_id}", tags=["Rooms"])
-async def get_room(room_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(
-        select(Room)
-        .options(joinedload(Room.members).joinedload(PersonRoom.user))
-        .filter(Room.id == room_id)
-    )
-    room = result.unique().scalar_one_or_none()
-    if not room:
-        raise HTTPException(404, "Комната не найдена")
-    return {
-        "id": room.id, "name": room.name, "max_members": room.max_members,
-        "members": [
-            {"user_id": pr.user.id, "login": pr.user.login, "name": pr.user.name, "has_file": pr.file is not None}
-            for pr in room.members
-        ],
-    }
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse("/")
+
+    try:
+        payload = decode_jwt(token)
+        user_id = int(payload["sub"])
+    except Exception:
+        return RedirectResponse("/")
+
+    async with get_conn() as conn:
+        rooms = await queries.get_all_room_user_id(conn, user_id=user_id) or []
+        is_staff_row  = await queries.is_user_staff(conn, user_id=user_id)
+        is_admin_row  = await queries.is_user_admin(conn, user_id=user_id)
+
+    is_staff = bool(is_staff_row and is_staff_row["is_staff"])
+    is_admin = bool(is_admin_row and is_admin_row["is_superuser"])
+
+    return templates.TemplateResponse(request, "dashboard.html", {
+        "request":  request,
+        "rooms":    rooms,
+        "is_staff": is_staff,
+        "is_admin": is_admin,
+    })
 
 
-@app.patch("/rooms/{room_id}", tags=["Rooms"])
-async def update_room(room_id: int, body: RoomUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(Room).filter(Room.id == room_id))
-    room = result.scalar_one_or_none()
-    if not room:
-        raise HTTPException(404, "Комната не найдена")
-    if body.name:
-        room.name = body.name
-    if body.max_members:
-        room.max_members = body.max_members
-    await db.commit()
-    return {"message": "Обновлено", "id": room.id}
+@app.get("/room/{room_id}", response_class=HTMLResponse)
+async def room_page(request: Request, room_id: int):
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse("/")
+
+    try:
+        payload = decode_jwt(token)
+        user_id = int(payload["sub"])
+    except Exception:
+        return RedirectResponse("/")
+
+    async with get_conn() as conn:
+        is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
+        room_data    = await queries.get_room_by_id(conn, room_id=room_id)
+
+    if not room_data:
+        return RedirectResponse("/dashboard")
+
+    is_staff = bool(is_staff_row and is_staff_row["is_staff"])
+    role = "teacher" if is_staff else "student"
+
+    return templates.TemplateResponse(request,"room.html", {
+        "request": request,
+        "room_id": room_id,
+        "role":    role,
+        "user_id": user_id,
+    })
 
 
-@app.delete("/rooms/{room_id}", tags=["Rooms"])
-async def delete_room(room_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(Room).filter(Room.id == room_id))
-    room = result.scalar_one_or_none()
-    if not room:
-        raise HTTPException(404, "Комната не найдена")
-    await db.execute(select(PersonRoom).filter(PersonRoom.room_id == room_id))
-    await db.delete(room)
-    await db.commit()
-    return {"message": "Комната удалена"}
+@app.get("/auth/logout")
+async def logout():
+    response = RedirectResponse("/")
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return response
 
 
-@app.post("/rooms/{room_id}/members", tags=["Members"])
-async def add_user(room_id: int, body: AddUser, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(Room).filter(Room.id == room_id))
-    room = result.scalar_one_or_none()
-    if not room:
-        raise HTTPException(404, "Комната не найдена")
-    if len(room.members) >= room.max_members:
-        raise HTTPException(400, "Комната заполнена")
-    result = await db.execute(select(User).filter(User.id == body.user_id))
-    target = result.scalar_one_or_none()
-    if not target:
-        raise HTTPException(404, "Пользователь не найден")
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.user_id == body.user_id, PersonRoom.room_id == room_id))
-    if result.scalar_one_or_none():
-        raise HTTPException(409, "Пользователь уже в комнате")
-    db.add(PersonRoom(user_id=body.user_id, room_id=room_id))
-    await db.commit()
-    return {"message": f"{target.login} добавлен в комнату {room.name}"}
+# ── WebSocket ─────────────────────────────────────────────────
+
+manager = RoomManager()
 
 
-@app.delete("/rooms/{room_id}/members/{user_id}", tags=["Members"])
-async def remove_user(room_id: int, user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.user_id == user_id, PersonRoom.room_id == room_id))
-    pr = result.scalar_one_or_none()
-    if not pr:
-        raise HTTPException(404, "Пользователь не в этой комнате")
-    await db.delete(pr)
-    await db.commit()
-    return {"message": "Пользователь удалён из комнаты"}
+@app.websocket("/ws/{room_id}/teacher")
+async def teacher_endpoint(websocket: WebSocket, room_id: str):
+    await manager.connect_teacher(room_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await manager.handle_teacher_message(room_id, data)
+    except WebSocketDisconnect:
+        manager.disconnect_teacher(room_id)
 
 
-@app.put("/rooms/{room_id}/file", tags=["Files"])
-async def save_file(room_id: int, body: FileUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.user_id == user.id, PersonRoom.room_id == room_id))
-    pr = result.scalar_one_or_none()
-    if not pr:
-        raise HTTPException(403, "Вы не состоите в этой комнате")
-    pr.file = body.file
-    await db.commit()
-    return {"message": "Файл сохранён"}
+@app.websocket("/ws/{room_id}/student/{student_id}")
+async def student_endpoint(websocket: WebSocket, room_id: str, student_id: str):
+    await manager.connect_student(room_id, student_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await manager.handle_student_message(room_id, student_id, data)
+    except WebSocketDisconnect:
+        manager.disconnect_student(room_id, student_id)
 
 
-@app.get("/rooms/{room_id}/file", tags=["Files"])
-async def get_my_file(room_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.user_id == user.id, PersonRoom.room_id == room_id))
-    pr = result.scalar_one_or_none()
-    if not pr:
-        raise HTTPException(403, "Вы не состоите в этой комнате")
-    return {"file": pr.file}
+@app.get("/room/{room_id}/settings", response_class=HTMLResponse)
+async def room_settings_page(request: Request, room_id: int):
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse("/")
+    try:
+        payload = decode_jwt(token)
+        user_id = int(payload["sub"])
+    except Exception:
+        return RedirectResponse("/")
 
+    async with get_conn() as conn:
+        is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
+        if not (is_staff_row and is_staff_row["is_staff"]):
+            return RedirectResponse("/dashboard")
+        room = await queries.get_room_by_id(conn, room_id=room_id)
+        if not room:
+            return RedirectResponse("/dashboard")
 
-@app.get("/rooms/{room_id}/files", tags=["Files"])
-async def get_all_files(room_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(Room).filter(Room.id == room_id))
-    room = result.scalar_one_or_none()
-    if not room:
-        raise HTTPException(404, "Комната не найдена")
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.room_id == room_id, PersonRoom.file.isnot(None)))
-    members = result.scalars().all()
-    return [{"user_id": pr.user_id, "file": pr.file} for pr in members]
-
-
-@app.delete("/rooms/{room_id}/file", tags=["Files"])
-async def delete_file(room_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
-    result = await db.execute(select(PersonRoom).filter(PersonRoom.user_id == user.id, PersonRoom.room_id == room_id))
-    pr = result.scalar_one_or_none()
-    if not pr:
-        raise HTTPException(403, "Вы не состоите в этой комнате")
-    pr.file = None
-    await db.commit()
-    return {"message": "Файл удалён"}
-
-
-app.mount("/", WSGIMiddleware(flask_app))
+    return templates.TemplateResponse(request, "room_settings.html", {
+        "room_id": room_id,
+        "room": dict(room),
+    })
