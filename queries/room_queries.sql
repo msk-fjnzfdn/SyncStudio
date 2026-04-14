@@ -45,13 +45,29 @@ where room_id = :room_id
   and user_id = :user;
 
 
--- name: get_all_room_user_id(user_id)<!
-select *
-from room_user
-where user_id = :user_id;
+-- name: get_rooms_info_by_user_id(user_id)
+select
+    r.id as room_id,
+    r.name as room_name,
+    r.max_members as max_members,
+    (select count(*) from room_user ru2 where ru2.room_id = r.id) as current_members_count,
+    ru.path_to_file,
+    ru.created_at as joined_at
+from room_user ru
+join room r on ru.room_id = r.id
+where ru.user_id = :user_id;
 
 -- name: get_room_members(room_id)<!
-select u.id, u.username, u.email, ru.created_at
-from room_user ru
-         join "user" u on ru.user_id = u.id
-where ru.room_id = :room_id;
+select
+    u.id,
+    u.username,
+    u.email,
+    ru.created_at         as joined_at,
+    r.max_members,
+    count(*) over ()      as current_members,
+    r.created_at          as room_created_at
+from "user" u
+join room_user ru on u.id = ru.user_id
+join room r on r.id = ru.room_id
+where ru.room_id = :room_id
+order by ru.created_at;

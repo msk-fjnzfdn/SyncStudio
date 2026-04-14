@@ -37,7 +37,7 @@ async def create_room(room_data: RoomCreate, user_id: int = Depends(get_current_
                     detail="Не удалось создать связь между юсером и комнатой"
                 )
 
-            return {'ok': True, 'room_id': room['id']}
+            return {'ok': True, 'room_id': room['id'], 'room_name': room['name']}
 
         raise HTTPException(403, "У вас нет прав на создание комнаты")
 
@@ -171,9 +171,26 @@ async def get_room_settings(
         if not await queries.is_user_staff(conn, user_id=user_id):
             raise HTTPException(403, "Нет прав")
 
-        room = await queries.get_room_by_id(conn, room_id=room_id)
-        if not room:
+        members = await queries.get_room_members(conn, room_id=room_id)
+        if not members:
             raise HTTPException(404, "Комната не найдена")
 
-        members = await queries.get_room_members(conn, room_id=room_id)
-        return {"ok": True, "room": dict(room), "members": [dict(m) for m in members]}
+        first = members[0]
+        return {
+            "ok": True,
+            "room": {
+                "id": room_id,
+                "max_members": first["max_members"],
+                "current_members": first["current_members"],
+                "created_at": first["room_created_at"],
+            },
+            "members": [
+                {
+                    "id": m["id"],
+                    "username": m["username"],
+                    "email": m["email"],
+                    "joined_at": m["joined_at"],
+                }
+                for m in members
+            ],
+        }

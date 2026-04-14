@@ -37,10 +37,20 @@
           <span class="room-index">{{ '%02d' % loop.index0 }}</span>
           <span class="room-status online"></span>
         </div>
-        <div class="room-name">{{ room.room_id }}</div>
+        <div class="room-name">{{ room.room_name }}</div>
         <div class="room-meta">
-          <span>комната</span>
-          <span class="arrow-right">→</span>
+            <div class="room-meta-left">
+                <span>комната</span>
+                {% set ratio = room.current_members_count / room.max_members %}
+                {% set cap_class = 'cap-green' %}
+                {% if ratio >= 0.9 %}{% set cap_class = 'cap-red' %}
+                {% elif ratio >= 0.5 %}{% set cap_class = 'cap-yellow' %}{% endif %}
+
+                <span class="room-capacity-tag {{ cap_class }}">
+                    <span class="count-value">{{ room.current_members_count }}</span> / {{ room.max_members }}
+                </span>
+            </div>
+            <span class="arrow-right">→</span>
         </div>
       </div>
       {% endfor %}
@@ -59,7 +69,6 @@
 </div>
 
 {% if is_staff %}
-<!-- Modal -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-header">
@@ -84,8 +93,4 @@
   </div>
 </div>
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
 {% endblock %}

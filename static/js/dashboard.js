@@ -6,7 +6,7 @@
   const form    = document.getElementById('createRoomForm');
   const msg     = document.getElementById('formMessage');
 
-  if (!openBtn) return; // student — no modal
+  if (!openBtn) return;
 
   function openModal()  { modal.classList.add('open'); }
   function closeModal() { modal.classList.remove('open'); msg.textContent = ''; }
@@ -37,10 +37,10 @@
 
       if (res.ok && json.ok) {
         msg.className = 'form-message success';
-        msg.textContent = `комната создана → ${json.room_id}`;
+        msg.textContent = `комната создана → ${json.room_name}`;
         setTimeout(() => {
           closeModal();
-          addRoomCard(json.room_id);
+          addRoomCard(json.room_id, json.room_name, 1, data.max_members);
           form.reset();
         }, 800);
       } else {
@@ -56,7 +56,7 @@
     }
   });
 
-  function addRoomCard(roomId) {
+  function addRoomCard(roomId, roomName, currentCount = 1, maxMembers = 20) {
     const grid = document.getElementById('roomsGrid');
     const empty = grid.querySelector('.empty-state');
     if (empty) empty.remove();
@@ -64,17 +64,33 @@
     const count = grid.querySelectorAll('.room-card').length;
     const idx = String(count).padStart(2, '0');
 
+    // Расчет класса цвета
+    const ratio = currentCount / maxMembers;
+    let capClass = 'cap-green';
+    if (ratio >= 0.9) capClass = 'cap-red';
+    else if (ratio >= 0.5) capClass = 'cap-yellow';
+
     const card = document.createElement('div');
     card.className = 'room-card fade-up';
     card.onclick = () => window.location = `/room/${roomId}`;
+
     card.innerHTML = `
       <div class="room-card-top">
         <span class="room-index">${idx}</span>
         <span class="room-status online"></span>
       </div>
-      <div class="room-name">${roomId}</div>
-      <div class="room-meta"><span>комната</span><span class="arrow-right">→</span></div>
+      <div class="room-name">${roomName}</div>
+      <div class="room-meta">
+        <div class="room-meta-left">
+          <span>комната</span>
+          <span class="room-capacity-tag ${capClass}">
+            <span class="count-value">${currentCount}</span> / ${maxMembers}
+          </span>
+        </div>
+        <span class="arrow-right">→</span>
+      </div>
     `;
+
     grid.appendChild(card);
   }
 })();

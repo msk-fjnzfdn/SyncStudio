@@ -56,7 +56,7 @@ async def dashboard(request: Request):
         return RedirectResponse("/")
 
     async with get_conn() as conn:
-        rooms = await queries.get_all_room_user_id(conn, user_id=user_id) or []
+        rooms = [row async for row in queries.get_rooms_info_by_user_id(conn, user_id=user_id)]
         is_staff_row  = await queries.is_user_staff(conn, user_id=user_id)
         is_admin_row  = await queries.is_user_admin(conn, user_id=user_id)
 
