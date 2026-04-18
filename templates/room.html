@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}комната {{ room_id }} — SyncStudio{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', path='css/room.css') }}">
+<link rel="stylesheet" href="css/room.css">
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 {% endblock %}
 
@@ -49,13 +49,11 @@
 
         {% if role == 'teacher' %}
         <div class="sidebar-section" style="padding-top:0.5rem">
-            <a href="/room/{{ room_id }}/settings"
-               style="display:block;width:100%;padding:7px 8px;background:var(--bg3);
+            <a href="/room/{{ room_id }}/settings" style="display:block;width:100%;padding:7px 8px;background:var(--bg3);
             border:1px solid var(--border2);border-radius:4px;
             font-size:0.72rem;color:var(--text2);text-align:center;
-            transition:all 0.15s"
-               onmouseover="this.style.borderColor='var(--border2)';this.style.color='var(--text)'"
-               onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+            transition:all 0.15s" onmouseover="this.style.borderColor='var(--border2)';this.style.color='var(--text)'"
+                onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
                 ⚙ настройки комнаты
             </a>
         </div>
@@ -157,6 +155,6 @@
     const USER_ID = "{{ user_id }}";
     const WS_HOST = window.location.host;
 </script>
-<script src="{{ url_for('static', path='js/pyodide-runner.js') }}"></script>
-<script src="{{ url_for('static', path='js/room.js') }}"></script>
+<script src="js/pyodide-runner.js"></script>
+<script src="js/room.js"></script>
 {% endblock %}
