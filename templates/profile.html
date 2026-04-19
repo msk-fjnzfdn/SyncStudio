@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}профиль — SyncStudio{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/profile.css">
+{% endblock %}
+
+{% block content %}
+<div class="profile-wrap">
+  <div class="profile-header">
+    <div>
+      <span class="page-tag">// аккаунт</span>
+      <h1 class="page-title">Мой профиль</h1>
+    </div>
+    <button class="btn-edit" id="editProfileBtn">
+      <span class="edit-icon">✎</span> редактировать
+    </button>
+  </div>
+
+  <div class="profile-grid">
+    <div class="profile-card">
+      <div class="profile-avatar">
+        <div class="avatar-initials" id="avatarInitials">U</div>
+        <div class="avatar-status online"></div>
+      </div>
+      <div class="profile-info">
+        <div class="info-row">
+          <span class="info-label">username</span>
+          <span class="info-value" id="usernameValue">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">email</span>
+          <span class="info-value" id="emailValue">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">роль</span>
+          <span class="info-value" id="roleValue">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">дата регистрации</span>
+          <span class="info-value" id="createdValue">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-card">
+      <div class="stats-header">
+        <span class="stats-tag">// статистика</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-value" id="roomsCount">0</span>
+          <span class="stat-label">комнат</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="codeExecutions">0</span>
+          <span class="stat-label">запусков кода</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="totalTime">0</span>
+          <span class="stat-label">часов в комнатах</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-card">
+    <div class="settings-header">
+      <span class="settings-tag">// настройки аккаунта</span>
+    </div>
+    
+    <form id="profileForm" style="display: none;">
+      <div class="form-group">
+        <label>username</label>
+        <input type="text" name="username" id="editUsername" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="cancelEditBtn">отмена</button>
+        <button type="submit" class="btn-submit">сохранить →</button>
+      </div>
+      <div class="form-message" id="profileMessage"></div>
+    </form>
+
+    <div class="danger-zone">
+      <div class="danger-header">
+        <span class="danger-tag">// опасная зона</span>
+      </div>
+      <p class="danger-desc">Изменение пароля или удаление аккаунта</p>
+      <div class="danger-buttons">
+        <button class="btn-change-password" id="changePasswordBtn">сменить пароль</button>
+        <button class="btn-delete-account" id="deleteAccountBtn">удалить аккаунт</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="passwordModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-tag">// смена пароля</span>
+      <button class="modal-close" id="closePasswordModal">✕</button>
+    </div>
+    <form id="passwordForm">
+      <div class="form-group">
+        <label>текущий пароль</label>
+        <input type="password" name="current_password" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>новый пароль</label>
+        <input type="password" name="new_password" required>
+      </div>
+      <div class="form-group">
+        <label>подтверждение пароля</label>
+        <input type="password" name="confirm_password" required>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="cancelPasswordBtn">отмена</button>
+        <button type="submit" class="btn-submit">сменить →</button>
+      </div>
+      <div class="form-message" id="passwordMessage"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-tag">// удаление аккаунта</span>
+      <button class="modal-close" id="closeDeleteModal">✕</button>
+    </div>
+    <div class="delete-warning">
+      <p>⚠️ Это действие необратимо</p>
+      <p class="delete-sub">Все ваши комнаты и данные будут удалены навсегда</p>
+    </div>
+    <form id="deleteForm">
+      <div class="form-group">
+        <label>введите пароль для подтверждения</label>
+        <input type="password" name="password" required>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="cancelDeleteBtn">отмена</button>
+        <button type="submit" class="btn-delete">удалить навсегда</button>
+      </div>
+      <div class="form-message" id="deleteMessage"></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROFILE_DATA = {{ profile_data | tojson | safe }};
+
+(function() {
+  function updateDisplay(data) {
+    document.getElementById('usernameValue').textContent = data.username || '—';
+    document.getElementById('emailValue').textContent = data.email || '—';
+    
+    const roleEl = document.getElementById('roleValue');
+    if (data.is_staff) {
+      roleEl.textContent = data.is_admin ? 'администратор' : 'учитель';
+      roleEl.style.color = '#39d353';
+    } else {
+      roleEl.textContent = 'ученик';
+      roleEl.style.color = '#5590e8';
+    }
+    
+    document.getElementById('createdValue').textContent = data.created_at || '—';
+    
+    const initials = (data.username || 'U').slice(0, 2).toUpperCase();
+    document.getElementById('avatarInitials').textContent = initials;
+    
+    document.getElementById('roomsCount').textContent = data.stats?.rooms_count || 0;
+    document.getElementById('codeExecutions').textContent = data.stats?.code_executions || 0;
+    document.getElementById('totalTime').textContent = data.stats?.total_hours || 0;
+    
+    if (data.edit_username) {
+      document.getElementById('editUsername').value = data.username;
+    }
+  }
+  
+  updateDisplay(PROFILE_DATA);
+  
+  const editBtn = document.getElementById('editProfileBtn');
+  const profileForm = document.getElementById('profileForm');
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  const profileMsg = document.getElementById('profileMessage');
+  
+  editBtn.addEventListener('click', () => {
+    profileForm.style.display = 'block';
+    editBtn.style.display = 'none';
+  });
+  
+  cancelEditBtn.addEventListener('click', () => {
+    profileForm.style.display = 'none';
+    editBtn.style.display = 'flex';
+    profileMsg.textContent = '';
+  });
+  
+  document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('editUsername').value.trim();
+    if (!username) {
+      profileMsg.className = 'form-message error';
+      profileMsg.textContent = 'username не может быть пустым';
+      return;
+    }
+    
+    const res = await fetch('/profile/update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }),
+      credentials: 'include',
+    });
+    
+    const json = await res.json();
+    if (res.ok) {
+      profileMsg.className = 'form-message success';
+      profileMsg.textContent = '✓ профиль обновлён';
+      PROFILE_DATA.username = username;
+      updateDisplay(PROFILE_DATA);
+      setTimeout(() => {
+        profileForm.style.display = 'none';
+        editBtn.style.display = 'flex';
+        profileMsg.textContent = '';
+      }, 1500);
+    } else {
+      profileMsg.className = 'form-message error';
+      profileMsg.textContent = json.detail || 'ошибка обновления';
+    }
+  });
+  
+  const passwordModal = document.getElementById('passwordModal');
+  const changePasswordBtn = document.getElementById('changePasswordBtn');
+  const closePasswordModal = document.getElementById('closePasswordModal');
+  const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
+  const passwordMsg = document.getElementById('passwordMessage');
+  
+  function openPasswordModal() { passwordModal.classList.add('open'); }
+  function closePasswordModalFunc() { 
+    passwordModal.classList.remove('open');
+    document.getElementById('passwordForm').reset();
+    passwordMsg.textContent = '';
+  }
+  
+  changePasswordBtn.addEventListener('click', openPasswordModal);
+  closePasswordModal.addEventListener('click', closePasswordModalFunc);
+  cancelPasswordBtn.addEventListener('click', closePasswordModalFunc);
+  passwordModal.addEventListener('click', (e) => {
+    if (e.target === passwordModal) closePasswordModalFunc();
+  });
+  
+  document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const current = formData.get('current_password');
+    const newPass = formData.get('new_password');
+    const confirm = formData.get('confirm_password');
+    
+    if (newPass !== confirm) {
+      passwordMsg.className = 'form-message error';
+      passwordMsg.textContent = 'пароли не совпадают';
+      return;
+    }
+    if (newPass.length < 6) {
+      passwordMsg.className = 'form-message error';
+      passwordMsg.textContent = 'пароль должен быть не менее 6 символов';
+      return;
+    }
+    
+    const res = await fetch('/profile/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: current, new_password: newPass }),
+      credentials: 'include',
+    });
+    
+    const json = await res.json();
+    if (res.ok) {
+      passwordMsg.className = 'form-message success';
+      passwordMsg.textContent = '✓ пароль изменён';
+      setTimeout(closePasswordModalFunc, 1500);
+    } else {
+      passwordMsg.className = 'form-message error';
+      passwordMsg.textContent = json.detail || 'ошибка смены пароля';
+    }
+  });
+  
+  const deleteModal = document.getElementById('deleteModal');
+  const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+  const closeDeleteModal = document.getElementById('closeDeleteModal');
+  const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+  const deleteMsg = document.getElementById('deleteMessage');
+  
+  function openDeleteModal() { deleteModal.classList.add('open'); }
+  function closeDeleteModalFunc() {
+    deleteModal.classList.remove('open');
+    document.getElementById('deleteForm').reset();
+    deleteMsg.textContent = '';
+  }
+  
+  deleteAccountBtn.addEventListener('click', openDeleteModal);
+  closeDeleteModal.addEventListener('click', closeDeleteModalFunc);
+  cancelDeleteBtn.addEventListener('click', closeDeleteModalFunc);
+  deleteModal.addEventListener('click', (e) => {
+    if (e.target === deleteModal) closeDeleteModalFunc();
+  });
+  
+  document.getElementById('deleteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = new FormData(e.target).get('password');
+    
+    const res = await fetch('/profile/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      credentials: 'include',
+    });
+    
+    const json = await res.json();
+    if (res.ok) {
+      deleteMsg.className = 'form-message success';
+      deleteMsg.textContent = 'аккаунт удалён, перенаправление...';
+      setTimeout(() => {
+        window.location = '/auth/logout';
+      }, 1500);
+    } else {
+      deleteMsg.className = 'form-message error';
+      deleteMsg.textContent = json.detail || 'ошибка удаления';
+    }
+  });
+})();
+</script>
+{% endblock %}
