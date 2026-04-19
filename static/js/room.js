@@ -84,7 +84,15 @@
       currentLang = btn.dataset.lang;
 
       const monacoLang = langToMonaco(currentLang);
-      if (editors.own) monaco.editor.setModelLanguage(editors.own.getModel(), monacoLang);
+      if (editors.own) {
+        monaco.editor.setModelLanguage(editors.own.getModel(), monacoLang);
+        // Сразу отправляем обновление на сервер при смене языка
+        sendJson({
+          type: 'code_update',
+          code: editors.own.getValue(),
+          lang: currentLang,
+        });
+      }
 
       const fname = document.getElementById('ownFileName');
       if (fname) fname.textContent = `main.${langToExt(currentLang)}`;
@@ -113,9 +121,10 @@
   });
 
   // ── WebSocket ──────────────────────────────────────────────
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = ROLE === 'teacher'
-    ? `ws://${WS_HOST}/ws/${ROOM_ID}/teacher`
-    : `ws://${WS_HOST}/ws/${ROOM_ID}/student/${USER_ID}`;
+    ? `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/teacher`
+    : `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/student/${USER_ID}`;
 
   let ws = null;
   let debounceTimer = null;
@@ -133,6 +142,11 @@
     } else {
       dot.className = 'dot disconnected';
       label.textContent = 'отключено';
+      // Если учитель отключился, очищаем список (он пересоберется при переподключении)
+      if (ROLE === 'teacher') {
+        const list = document.getElementById('studentsList');
+        if (list) list.innerHTML = '<div class="no-students">переподключение...</div>';
+      }
     }
   }
 
@@ -145,7 +159,7 @@
 
     ws.onclose = () => {
       setWsStatus(false);
-      setTimeout(connectWS, 3000); // переподключение
+      setTimeout(connectWS, 3000);
     };
 
     ws.onerror = () => ws.close();
@@ -154,7 +168,9 @@
       try {
         const msg = JSON.parse(event.data);
         handleMessage(msg);
-      } catch {}
+      } catch (err) {
+        console.error("WS Message Error:", err);
+      }
     };
   }
 
@@ -179,13 +195,18 @@
       case 'student_code_snapshot':
         if (ROLE === 'teacher') {
           if (editors.student) {
-            editors.student.setValue(msg.code || '');
+            // Чтобы не сбрасывать курсор учителя при живом редактировании
+            if (editors.student.getValue() !== msg.code) {
+               editors.student.setValue(msg.code || '');
+            }
             if (msg.lang) monaco.editor.setModelLanguage(editors.student.getModel(), langToMonaco(msg.lang));
           }
           viewingStudentId = msg.student_id;
+
           const tab = document.getElementById('studentTab');
           const nameEl = document.getElementById('studentTabName');
           const fname  = document.getElementById('studentFileName');
+
           if (tab) tab.style.display = 'inline-block';
           if (nameEl) nameEl.textContent = msg.student_id;
           if (fname) fname.textContent = `student_${msg.student_id}.${langToExt(msg.lang || 'python')}`;
@@ -195,20 +216,26 @@
           if (viewInfo) viewInfo.innerHTML = `<span class="viewing-active">↗ ${msg.student_id}</span>`;
           if (stopBtn)  stopBtn.style.display = 'block';
 
-          // переключаем на вкладку ученика
-          document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.tab === 'student');
-          });
-          document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('active'));
-          document.getElementById('paneStudent')?.classList.add('active');
-          setTimeout(() => editors.student?.layout(), 10);
+          // Если это первый запуск просмотра (не live апдейт), переключаем вкладку
+          if (!msg.live) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+              b.classList.toggle('active', b.dataset.tab === 'student');
+            });
+            document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById('paneStudent')?.classList.add('active');
+            setTimeout(() => editors.student?.layout(), 10);
+          }
         }
         break;
 
       case 'teacher_edit':
         if (ROLE === 'student' && editors.own) {
           isTeacherEditing = true;
+          // Сохраняем позицию курсора, чтобы он не прыгал при правках учителя
+          const state = editors.own.saveViewState();
           editors.own.setValue(msg.code || '');
+          editors.own.restoreViewState(state);
+
           showEditBanner();
           clearTimeout(window._editFlagTimer);
           window._editFlagTimer = setTimeout(() => { isTeacherEditing = false; }, 2000);
@@ -264,6 +291,10 @@
     const stopBtn  = document.getElementById('stopViewBtn');
     if (viewInfo) viewInfo.innerHTML = '<span class="viewing-none">никто не выбран</span>';
     if (stopBtn)  stopBtn.style.display = 'none';
+
+    // Снимаем выделение в списке
+    document.querySelectorAll('.student-item').forEach(i => i.classList.remove('viewing'));
+
     // вернуться к своему коду
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'own'));
     document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('active'));
@@ -316,10 +347,12 @@
     const list = document.getElementById('studentsList');
     if (!list) return;
     list.querySelector(`[data-id="${studentId}"]`)?.remove();
-    if (!list.children.length) {
+
+    if (list.children.length === 0) {
       list.innerHTML = '<div class="no-students">нет подключённых учеников</div>';
     }
     if (viewingStudentId === studentId) {
+      window.showToast?.(`Ученик ${studentId} отключился`, 'error');
       document.getElementById('stopViewBtn')?.click();
     }
   }
