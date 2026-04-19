@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, C
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
+from flask import Flask
+from a2wsgi import WSGIMiddleware
 from contextlib import asynccontextmanager
 
 from database import init_pool, close_pool, get_conn, queries
@@ -18,17 +20,22 @@ async def lifespan(app: FastAPI):
     yield
     await close_pool()
 
-
+flask_app = Flask(__name__)
 app = FastAPI(lifespan=lifespan)
-
 templates = Jinja2Templates(directory="templates")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/flask", WSGIMiddleware(flask_app))
 
 app.include_router(autentification.router)
 app.include_router(room.router)
 
 
 # ── Page routes ───────────────────────────────────────────────
+
+@flask_app.route("/flask")
+def flask_main():
+    return "Hello World from Flask"
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):

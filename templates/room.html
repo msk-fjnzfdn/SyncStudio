@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}комната {{ room_id }} — SyncStudio{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="css/room.css">
+<link rel="stylesheet" href="/static/css/room.css">
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 {% endblock %}
 
@@ -155,6 +155,6 @@
     const USER_ID = "{{ user_id }}";
     const WS_HOST = window.location.host;
 </script>
-<script src="js/pyodide-runner.js"></script>
-<script src="js/room.js"></script>
+<script src="/static/js/pyodide-runner.js"></script>
+<script src="/static/js/room.js"></script>
 {% endblock %}
