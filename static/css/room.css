@@ -98,8 +98,10 @@
 }
 .student-dot {
   width: 5px; height: 5px; border-radius: 50%;
-  background: var(--green); flex-shrink: 0;
+  background: var(--text3); flex-shrink: 0;
+  transition: background 0.2s;
 }
+.student-dot.online { background: var(--green); }
 .no-students { font-size: 0.72rem; color: var(--text3); }
 
 .viewing-info { font-size: 0.75rem; color: var(--text2); margin-bottom: 0.4rem; }
@@ -252,4 +254,15 @@
   font-size: 0.72rem; color: var(--amber);
   text-align: center;
   flex-shrink: 0;
+}
+
+/* ── Teacher viewing notification ── */
+.viewing-banner {
+  padding: 5px 1rem;
+  background: rgba(85,144,232,0.08);
+  border-bottom: 1px solid rgba(85,144,232,0.2);
+  font-size: 0.72rem; color: var(--blue);
+  text-align: center;
+  flex-shrink: 0;
+  display: none;
 }

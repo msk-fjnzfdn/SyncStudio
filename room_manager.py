@@ -39,7 +39,7 @@ class RoomManager:
     async def connect_student(self, room_id: str, student_id: str, ws: WebSocket):
         await ws.accept()
         room = self.get_or_create(room_id)
-        room["students"][student_id] = {"ws": ws, "code": "", "lang": "python"}
+        room["students"][student_id] = {"ws": ws, "code": "", "lang": "python", "output": ""}
 
         # 1. Отдаём код учителя ученику
         if room["teacher_code"]:
@@ -63,6 +63,7 @@ class RoomManager:
 
     async def disconnect_student(self, room_id: str, student_id: str):
         room = self.rooms.get(room_id)
+        print(room)
         if not room:
             return
 
@@ -99,15 +100,31 @@ class RoomManager:
 
         elif msg_type == "view_student":
             student_id = data.get("student_id")
+            # Уведомляем предыдущего просматриваемого ученика — разблокировать
+            prev_id = room.get("teacher_viewing")
+            if prev_id and prev_id != student_id:
+                prev_student = room["students"].get(prev_id)
+                if prev_student:
+                    try:
+                        await prev_student["ws"].send_json({"type": "viewing_stop"})
+                    except Exception:
+                        pass
+
             room["teacher_viewing"] = student_id
             student = room["students"].get(student_id)
             teacher_ws = room["teacher_ws"]
             if student and teacher_ws:
+                # Уведомляем ученика — заблокировать редактор
+                try:
+                    await student["ws"].send_json({"type": "viewing_start"})
+                except Exception:
+                    pass
                 await teacher_ws.send_json({
                     "type": "student_code_snapshot",
                     "student_id": student_id,
                     "code": student["code"],
                     "lang": student["lang"],
+                    "output": student.get("output", ""),
                 })
 
         elif msg_type == "edit_student":
@@ -126,6 +143,14 @@ class RoomManager:
                     pass
 
         elif msg_type == "stop_viewing":
+            prev_id = room.get("teacher_viewing")
+            if prev_id:
+                prev_student = room["students"].get(prev_id)
+                if prev_student:
+                    try:
+                        await prev_student["ws"].send_json({"type": "viewing_stop"})
+                    except Exception:
+                        pass
             room["teacher_viewing"] = None
 
     async def handle_student_message(self, room_id: str, student_id: str, data: dict):
@@ -133,10 +158,11 @@ class RoomManager:
         if not room:
             return
 
+        student = room["students"].get(student_id)
+        if not student:
+            return
+
         if data.get("type") == "code_update":
-            student = room["students"].get(student_id)
-            if not student:
-                return
             student["code"] = data.get("code", "")
             student["lang"] = data.get("lang", "python")
 
@@ -147,7 +173,23 @@ class RoomManager:
                         "student_id": student_id,
                         "code": student["code"],
                         "lang": student["lang"],
+                        "output": student.get("output", ""),
                         "live": True,
+                    })
+                except Exception:
+                    pass
+
+        elif data.get("type") == "console_output":
+            student["output"] = data.get("output", "")
+            student["output_success"] = data.get("success", True)
+
+            if room["teacher_viewing"] == student_id and room["teacher_ws"]:
+                try:
+                    await room["teacher_ws"].send_json({
+                        "type": "student_console_output",
+                        "student_id": student_id,
+                        "output": student["output"],
+                        "success": student["output_success"],
                     })
                 except Exception:
                     pass

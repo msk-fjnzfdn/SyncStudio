@@ -133,7 +133,7 @@ async def student_endpoint(websocket: WebSocket, room_id: str, student_id: str):
             data = await websocket.receive_json()
             await manager.handle_student_message(room_id, student_id, data)
     except WebSocketDisconnect:
-        manager.disconnect_student(room_id, student_id)
+        await manager.disconnect_student(room_id, student_id)
 
 
 @app.get("/room/{room_id}/settings", response_class=HTMLResponse)

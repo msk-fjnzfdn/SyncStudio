@@ -108,7 +108,7 @@
       btn.classList.add('active');
 
       const pane = document.getElementById(tab === 'own' ? 'paneOwn' :
-                   tab === 'student' ? 'paneStudent' : 'paneTeacher');
+          tab === 'student' ? 'paneStudent' : 'paneTeacher');
       if (pane) {
         pane.classList.add('active');
         setTimeout(() => {
@@ -123,8 +123,8 @@
   // ── WebSocket ──────────────────────────────────────────────
   const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = ROLE === 'teacher'
-    ? `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/teacher`
-    : `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/student/${USER_ID}`;
+      ? `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/teacher`
+      : `${wsProtocol}://${WS_HOST}/ws/${ROOM_ID}/student/${USER_ID}`;
 
   let ws = null;
   let debounceTimer = null;
@@ -155,6 +155,12 @@
 
     ws.onopen = () => {
       setWsStatus(true);
+      // При (ре)подключении сбрасываем список — сервер пришлёт актуальный через student_joined
+      if (ROLE === 'teacher') {
+        const list = document.getElementById('studentsList');
+        if (list) list.innerHTML = '<div class="no-students">нет подключённых учеников</div>';
+        viewingStudentId = null;
+      }
     };
 
     ws.onclose = () => {
@@ -197,7 +203,7 @@
           if (editors.student) {
             // Чтобы не сбрасывать курсор учителя при живом редактировании
             if (editors.student.getValue() !== msg.code) {
-               editors.student.setValue(msg.code || '');
+              editors.student.setValue(msg.code || '');
             }
             if (msg.lang) monaco.editor.setModelLanguage(editors.student.getModel(), langToMonaco(msg.lang));
           }
@@ -333,7 +339,7 @@
     item.dataset.id = studentId;
     item.innerHTML = `
       <span class="student-name">${studentId}</span>
-      <span class="student-dot"></span>
+      <span class="student-dot online" title="онлайн"></span>
     `;
     item.addEventListener('click', () => {
       sendJson({ type: 'view_student', student_id: studentId });
