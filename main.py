@@ -30,6 +30,7 @@ app.include_router(room.router)
 
 # ── Page routes ───────────────────────────────────────────────
 
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     # Если уже залогинен — редирект на дашборд
@@ -56,19 +57,26 @@ async def dashboard(request: Request):
         return RedirectResponse("/")
 
     async with get_conn() as conn:
-        rooms = [row async for row in queries.get_rooms_info_by_user_id(conn, user_id=user_id)]
-        is_staff_row  = await queries.is_user_staff(conn, user_id=user_id)
-        is_admin_row  = await queries.is_user_admin(conn, user_id=user_id)
+        rooms = [
+            row
+            async for row in queries.get_rooms_info_by_user_id(conn, user_id=user_id)
+        ]
+        is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
+        is_admin_row = await queries.is_user_admin(conn, user_id=user_id)
 
     is_staff = bool(is_staff_row and is_staff_row["is_staff"])
     is_admin = bool(is_admin_row and is_admin_row["is_superuser"])
 
-    return templates.TemplateResponse(request, "dashboard.html", {
-        "request":  request,
-        "rooms":    rooms,
-        "is_staff": is_staff,
-        "is_admin": is_admin,
-    })
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "request": request,
+            "rooms": rooms,
+            "is_staff": is_staff,
+            "is_admin": is_admin,
+        },
+    )
 
 
 @app.get("/room/{room_id}", response_class=HTMLResponse)
@@ -85,7 +93,7 @@ async def room_page(request: Request, room_id: int):
 
     async with get_conn() as conn:
         is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
-        room_data    = await queries.get_room_by_id(conn, room_id=room_id)
+        room_data = await queries.get_room_by_id(conn, room_id=room_id)
 
     if not room_data:
         return RedirectResponse("/dashboard")
@@ -93,12 +101,16 @@ async def room_page(request: Request, room_id: int):
     is_staff = bool(is_staff_row and is_staff_row["is_staff"])
     role = "teacher" if is_staff else "student"
 
-    return templates.TemplateResponse(request,"room.html", {
-        "request": request,
-        "room_id": room_id,
-        "role":    role,
-        "user_id": user_id,
-    })
+    return templates.TemplateResponse(
+        request,
+        "room.html",
+        {
+            "request": request,
+            "room_id": room_id,
+            "role": role,
+            "user_id": user_id,
+        },
+    )
 
 
 @app.get("/auth/logout")
@@ -133,7 +145,7 @@ async def student_endpoint(websocket: WebSocket, room_id: str, student_id: str):
             data = await websocket.receive_json()
             await manager.handle_student_message(room_id, student_id, data)
     except WebSocketDisconnect:
-        manager.disconnect_student(room_id, student_id)
+        await manager.disconnect_student(room_id, student_id)
 
 
 @app.get("/room/{room_id}/settings", response_class=HTMLResponse)
@@ -155,7 +167,12 @@ async def room_settings_page(request: Request, room_id: int):
         if not room:
             return RedirectResponse("/dashboard")
 
-    return templates.TemplateResponse(request, "room_settings.html", {
-        "room_id": room_id,
-        "room": dict(room),
-    })
+    return templates.TemplateResponse(
+        request,
+        "room_settings.html",
+        {
+            "room_id": room_id,
+            "room": dict(room),
+        },
+    )
+

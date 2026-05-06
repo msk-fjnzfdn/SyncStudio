@@ -31,10 +31,7 @@ class RoomManager:
 
         # При подключении учителя сразу отправляем ему список всех, кто уже в комнате
         for student_id in room["students"]:
-            await ws.send_json({
-                "type": "student_joined",
-                "student_id": student_id
-            })
+            await ws.send_json({"type": "student_joined", "student_id": student_id})
 
     async def connect_student(self, room_id: str, student_id: str, ws: WebSocket):
         await ws.accept()
@@ -43,17 +40,18 @@ class RoomManager:
 
         # 1. Отдаём код учителя ученику
         if room["teacher_code"]:
-            await ws.send_json({
-                "type": "teacher_code_broadcast",
-                "code": room["teacher_code"],
-            })
+            await ws.send_json(
+                {
+                    "type": "teacher_code_broadcast",
+                    "code": room["teacher_code"],
+                }
+            )
 
         # 2. Уведомляем учителя о новом ученике
         if room["teacher_ws"]:
-            await room["teacher_ws"].send_json({
-                "type": "student_joined",
-                "student_id": student_id
-            })
+            await room["teacher_ws"].send_json(
+                {"type": "student_joined", "student_id": student_id}
+            )
 
     def disconnect_teacher(self, room_id: str):
         room = self.rooms.get(room_id)
@@ -74,10 +72,9 @@ class RoomManager:
         # Уведомляем учителя, что ученик ушел
         if room["teacher_ws"]:
             try:
-                await room["teacher_ws"].send_json({
-                    "type": "student_left",
-                    "student_id": student_id
-                })
+                await room["teacher_ws"].send_json(
+                    {"type": "student_left", "student_id": student_id}
+                )
             except Exception:
                 pass
 
@@ -91,24 +88,47 @@ class RoomManager:
 
         if msg_type == "code_update":
             room["teacher_code"] = data.get("code", "")
-            await self._broadcast_to_students(room, {
-                "type": "teacher_code_broadcast",
-                "code": room["teacher_code"],
-                "lang": data.get("lang", "python"),
-            })
+            await self._broadcast_to_students(
+                room,
+                {
+                    "type": "teacher_code_broadcast",
+                    "code": room["teacher_code"],
+                    "lang": data.get("lang", "python"),
+                },
+            )
 
         elif msg_type == "view_student":
             student_id = data.get("student_id")
+
+            # Если учитель уже смотрел на другого ученика — снимаем с него блокировку
+            prev_id = room.get("teacher_viewing")
+            if prev_id and prev_id != student_id:
+                prev_student = room["students"].get(prev_id)
+                if prev_student:
+                    try:
+                        await prev_student["ws"].send_json(
+                            {"type": "teacher_stopped_watching"}
+                        )
+                    except Exception:
+                        pass
+
             room["teacher_viewing"] = student_id
             student = room["students"].get(student_id)
             teacher_ws = room["teacher_ws"]
+
             if student and teacher_ws:
-                await teacher_ws.send_json({
-                    "type": "student_code_snapshot",
-                    "student_id": student_id,
-                    "code": student["code"],
-                    "lang": student["lang"],
-                })
+                await teacher_ws.send_json(
+                    {
+                        "type": "student_code_snapshot",
+                        "student_id": student_id,
+                        "code": student["code"],
+                        "lang": student["lang"],
+                    }
+                )
+                try:
+                    await student["ws"].send_json({"type": "teacher_watching"})
+                except Exception:
+                    pass
 
         elif msg_type == "edit_student":
             student_id = data.get("student_id")
@@ -117,38 +137,71 @@ class RoomManager:
             if student:
                 student["code"] = new_code
                 try:
-                    await student["ws"].send_json({
-                        "type": "teacher_edit",
-                        "code": new_code,
-                        "lang": student["lang"],
-                    })
+                    await student["ws"].send_json(
+                        {
+                            "type": "teacher_edit",
+                            "code": new_code,
+                            "lang": student["lang"],
+                        }
+                    )
                 except Exception:
                     pass
 
         elif msg_type == "stop_viewing":
+            prev_id = room["teacher_viewing"]
             room["teacher_viewing"] = None
+
+            # Уведомляем ученика что блокировка снята
+            if prev_id:
+                prev_student = room["students"].get(prev_id)
+                if prev_student:
+                    try:
+                        await prev_student["ws"].send_json(
+                            {"type": "teacher_stopped_watching"}
+                        )
+                    except Exception:
+                        pass
 
     async def handle_student_message(self, room_id: str, student_id: str, data: dict):
         room = self.rooms.get(room_id)
         if not room:
             return
 
-        if data.get("type") == "code_update":
+        msg_type = data.get("type")
+
+        if msg_type == "code_update":
             student = room["students"].get(student_id)
             if not student:
                 return
             student["code"] = data.get("code", "")
             student["lang"] = data.get("lang", "python")
 
+            # Пересылаем живое обновление учителю если он смотрит на этого ученика
             if room["teacher_viewing"] == student_id and room["teacher_ws"]:
                 try:
-                    await room["teacher_ws"].send_json({
-                        "type": "student_code_snapshot",
-                        "student_id": student_id,
-                        "code": student["code"],
-                        "lang": student["lang"],
-                        "live": True,
-                    })
+                    await room["teacher_ws"].send_json(
+                        {
+                            "type": "student_code_snapshot",
+                            "student_id": student_id,
+                            "code": student["code"],
+                            "lang": student["lang"],
+                            "live": True,
+                        }
+                    )
+                except Exception:
+                    pass
+
+        elif msg_type == "console_output":
+            # Пересылаем вывод консоли учителю если он смотрит на этого ученика
+            if room["teacher_viewing"] == student_id and room["teacher_ws"]:
+                try:
+                    await room["teacher_ws"].send_json(
+                        {
+                            "type": "student_console_output",
+                            "output": data.get("output", ""),
+                            "success": data.get("success", True),
+                        }
+                    )
                 except Exception:
                     pass
 

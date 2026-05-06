@@ -100,12 +100,19 @@
             <div class="editor-topbar">
                 <span class="file-name" id="studentFileName">—</span>
                 <div class="editor-actions">
+                    <button class="btn-run" id="runStudentBtn">
+                        <span class="run-icon">▶</span> запустить
+                    </button>
                     <button class="btn-save-student" id="saveStudentBtn">
-                        ✓ сохранить правки
+                        ↓ сохранить файл
                     </button>
                 </div>
             </div>
             <div class="monaco-wrap" id="studentEditor"></div>
+            <div class="output-panel" id="studentOutput">
+                <div class="output-header">// вывод ученика</div>
+                <pre class="output-content" id="studentOutputContent">ожидание запуска...</pre>
+            </div>
         </div>
 
         {% else %}
@@ -121,6 +128,9 @@
                 <div class="editor-actions">
                     <button class="btn-run" id="runOwnBtn">
                         <span class="run-icon">▶</span> запустить
+                    </button>
+                    <button class="btn-save-own" id="saveOwnBtn">
+                        ↓ сохранить файл
                     </button>
                 </div>
             </div>

@@ -253,3 +253,14 @@
   text-align: center;
   flex-shrink: 0;
 }
+
+/* ── Teacher watch notification ── */
+.watch-banner {
+  padding: 6px 1rem;
+  background: rgba(85,144,232,0.1);
+  border-bottom: 1px solid rgba(85,144,232,0.25);
+  font-size: 0.72rem; color: var(--blue);
+  text-align: center;
+  flex-shrink: 0;
+  display: none;
+}
