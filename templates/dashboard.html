@@ -9,7 +9,8 @@
   <div class="dash-header">
     <div>
       <span class="page-tag">// dashboard</span>
-      <h1 class="page-title">Мои комнаты</h1>
+      <p class="page-greeting">Здравствуйте, {{ username }}</p>
+      <h1 class="page-title">{% if is_staff %}Ваши комнаты{% else %}Ваши комнаты{% endif %}</h1>
     </div>
     {% if is_staff %}
     <button class="btn-create" id="openModal">

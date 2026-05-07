@@ -11,11 +11,11 @@
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <span class="sidebar-tag">// {{ room_id }}</span>
+            <span class="sidebar-tag">// {{ room_name }}</span>
             {% if role == 'teacher' %}
-            <span class="role-pill teacher">учитель</span>
+            <span class="role-pill teacher">{{ username }}</span>
             {% else %}
-            <span class="role-pill student">ученик</span>
+            <span class="role-pill student">{{ username }}</span>
             {% endif %}
         </div>
 
@@ -86,6 +86,9 @@
                 <div class="editor-actions">
                     <button class="btn-run" id="runOwnBtn">
                         <span class="run-icon">▶</span> запустить
+                    </button>
+                    <button class="btn-save-own" id="saveOwnBtn">
+                        ↓ сохранить файл
                     </button>
                 </div>
             </div>

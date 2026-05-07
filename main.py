@@ -63,6 +63,7 @@ async def dashboard(request: Request):
         ]
         is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
         is_admin_row = await queries.is_user_admin(conn, user_id=user_id)
+        user_data = await queries.get_user_by_id(conn, id=user_id)
 
     is_staff = bool(is_staff_row and is_staff_row["is_staff"])
     is_admin = bool(is_admin_row and is_admin_row["is_superuser"])
@@ -73,6 +74,7 @@ async def dashboard(request: Request):
         {
             "request": request,
             "rooms": rooms,
+            "username": user_data["username"] if user_data else str(user_id),
             "is_staff": is_staff,
             "is_admin": is_admin,
         },
@@ -94,6 +96,7 @@ async def room_page(request: Request, room_id: int):
     async with get_conn() as conn:
         is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
         room_data = await queries.get_room_by_id(conn, room_id=room_id)
+        user_data = await queries.get_user_by_id(conn, id=user_id)
 
     if not room_data:
         return RedirectResponse("/dashboard")
@@ -107,8 +110,10 @@ async def room_page(request: Request, room_id: int):
         {
             "request": request,
             "room_id": room_id,
+            "room_name": room_data["name"] if room_data else str(room_id),
             "role": role,
             "user_id": user_id,
+            "username": user_data["username"] if user_data else str(user_id),
         },
     )
 

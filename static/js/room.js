@@ -357,8 +357,8 @@
     runCode(editors.student.getValue(), viewingStudentLang, out, false);
   });
 
-  // ── Save file (PATCH /add_file) ────────────────────────────
-  async function saveCodeAsFile(code, lang, roomId, userId) {
+  // ── Save file (PATCH /room/add_file) ─────────────────────
+  async function saveCodeAsFile(code, lang, roomId, targetUserId = null) {
     const ext      = langToExt(lang);
     const mime     = langToMime(lang);
     const filename = `main.${ext}`;
@@ -368,30 +368,31 @@
     const formData = new FormData();
     formData.append('image', file, filename);
 
+    let url = `/room/add_file?room_id=${encodeURIComponent(roomId)}`;
+    if (targetUserId) url += `&target_user_id=${encodeURIComponent(targetUserId)}`;
+
     try {
-      const res = await fetch(`/add_file?room_id=${roomId}&user_id=${userId}`, {
-        method: 'PATCH',
-        body: formData,
-      });
-      const json = await res.json();
-      if (json.error) {
-        window.showToast(`Ошибка: ${json.error}`, 'error');
-      } else {
-        window.showToast('Файл сохранён ✓', 'success');
+      const res = await fetch(url, { method: 'PATCH', body: formData });
+      if (!res.ok) {
+        window.showToast(`Ошибка сервера: ${res.status}`, 'error');
+        return;
       }
+      const json = await res.json();
+      if (json.error) window.showToast(`Ошибка: ${json.error}`, 'error');
+      else window.showToast('Файл сохранён ✓', 'success');
     } catch (err) {
       window.showToast('Не удалось сохранить файл', 'error');
       console.error('Save error:', err);
     }
   }
 
-  // Кнопка сохранения для ученика (свой код)
+  // Ученик и учитель сохраняют свой код — targetUserId не передаём
   document.getElementById('saveOwnBtn')?.addEventListener('click', () => {
     if (!editors.own) return;
-    saveCodeAsFile(editors.own.getValue(), currentLang, ROOM_ID, USER_ID);
+    saveCodeAsFile(editors.own.getValue(), currentLang, ROOM_ID);
   });
 
-  // Кнопка сохранения для учителя (код наблюдаемого ученика)
+  // Учитель сохраняет код ученика — передаём viewingStudentId как target
   document.getElementById('saveStudentBtn')?.addEventListener('click', () => {
     if (!editors.student || !viewingStudentId) return;
     saveCodeAsFile(editors.student.getValue(), viewingStudentLang, ROOM_ID, viewingStudentId);
@@ -472,6 +473,46 @@
     t._timer = setTimeout(() => { t.className = 'toast'; }, 3000);
   };
 
+  // ── Load saved file on open ────────────────────────────────
+  async function loadSavedFile() {
+    const url = `/room/get_file?room_id=${encodeURIComponent(ROOM_ID)}&user_id=${encodeURIComponent(USER_ID)}`;
+    try {
+      const res = await fetch(url);
+      if (res.status === 404) {
+        // Показываем placeholder-комментарий в редакторе
+        const placeholders = {
+          python:     '# нет сохранённого файла\n',
+          javascript: '// нет сохранённого файла\n',
+          cpp:        '// нет сохранённого файла\n',
+        };
+        if (editors.own) editors.own.setValue(placeholders[currentLang] || '');
+        window.showToast('Нет загруженных файлов', '');
+        return;
+      }
+      if (!res.ok) {
+        window.showToast(`Ошибка загрузки файла: ${res.status}`, 'error');
+        return;
+      }
+      const text = await res.text();
+      if (editors.own) {
+        editors.own.setValue(text);
+        window.showToast('Файл загружен ✓', 'success');
+        // Отправляем загруженный код на сервер — ждём пока WS откроется
+        const trySend = () => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            sendJson({ type: 'code_update', code: text, lang: currentLang });
+          } else {
+            setTimeout(trySend, 300);
+          }
+        };
+        trySend();
+      }
+    } catch (err) {
+      console.error('Load file error:', err);
+    }
+  }
+
   // ── Start ──────────────────────────────────────────────────
   connectWS();
+  loadSavedFile();
 })();

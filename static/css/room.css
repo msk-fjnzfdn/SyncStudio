@@ -179,13 +179,20 @@
 .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
 .run-icon { font-size: 0.65rem; }
 
-.btn-save-student {
-  background: none; border: 1px solid rgba(57,211,83,0.3);
-  color: var(--green); padding: 5px 14px;
+.btn-save-student,
+.btn-save-own {
+  display: flex; align-items: center; gap: 5px;
+  background: none;
+  border: 1px solid rgba(57,211,83,0.35);
+  color: var(--green);
+  padding: 5px 14px;
   border-radius: 4px; font-size: 0.75rem;
-  transition: all 0.15s;
+  transition: all 0.15s; cursor: pointer;
 }
-.btn-save-student:hover { background: rgba(57,211,83,0.08); }
+.btn-save-student:hover,
+.btn-save-own:hover { background: rgba(57,211,83,0.08); border-color: var(--green); }
+.btn-save-student:disabled,
+.btn-save-own:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .live-badge {
   font-size: 0.65rem; color: var(--green);

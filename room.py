@@ -3,6 +3,7 @@ from typing import Optional
 import pathlib
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Path
+from fastapi.responses import FileResponse
 
 from dependencies import get_current_user
 from database import get_conn, queries
@@ -54,35 +55,37 @@ async def get_rooms(user_id: int = Depends(get_current_user)):
 async def add_file(
         room_id: int,
         user_id: int = Depends(get_current_user),
+        target_user_id: Optional[int] = None,  # учитель передаёт id ученика
         image: Optional[UploadFile] = File(None)
 ):
     if not image:
         return {"error": "Файл не загружен"}
 
-    content = await image.read()
+    # Определяем от чьего имени сохраняем
+    async with get_conn() as conn:
+        role = queries.is_user_staff(conn, user_id=user_id)
 
+    if target_user_id and target_user_id != user_id:
+        # Только учитель может сохранять чужой файл
+        if not role:
+            raise HTTPException(status_code=403, detail="Нет прав сохранять файл другого пользователя")
+        save_as_user_id = target_user_id
+    else:
+        save_as_user_id = user_id
+
+    content = await image.read()
     if len(content) > 5 * 1024 * 1024:
         return {"error": "Файл слишком большой"}
 
-    await image.seek(0)
-
-
-
-    upload_path = Path(f"uploads/room_{room_id}")
-    file_location = upload_path / f'user_{user_id}'
-
-    if pathlib.Path(file_location).exists():
-        return {"error": "Данный файл уже существует"}
-
-
+    upload_path = pathlib.Path(f"uploads/room_{room_id}")
     upload_path.mkdir(parents=True, exist_ok=True)
-
+    file_location = upload_path / f'user_{save_as_user_id}'
 
     with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
+        buffer.write(content)
 
     async with get_conn() as conn:
-        queries.add_file_to_room(conn, path_to_file=file_location, user_id=user_id, room_id=room_id)
+        queries.add_file_to_room(conn, path_to_file=str(file_location), user_id=save_as_user_id, room_id=room_id)
 
     return {"info": f"Файл сохранен как {file_location}"}
 
@@ -194,3 +197,16 @@ async def get_room_settings(
                 for m in members
             ],
         }
+
+
+@router.get('/get_file', status_code=status.HTTP_200_OK)
+async def get_file(
+        room_id: int,
+        user_id: int = Depends(get_current_user)
+):
+    file_location = pathlib.Path(f"uploads/room_{room_id}") / f'user_{user_id}'
+
+    if not file_location.exists():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    return FileResponse(path=file_location, filename=f'user_{user_id}')

@@ -138,3 +138,8 @@
 .modal-overlay.open {
   display: flex !important; /* Гарантируем появление при добавлении класса */
 }
+.page-greeting {
+  font-size: 2rem;
+  color: var(--text2);
+  margin: 0.25rem 0 0.15rem;
+}
