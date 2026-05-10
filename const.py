@@ -7,7 +7,7 @@ load_dotenv()
 
 CLIENT_ID = os.getenv("YANDEX_CLIENT_ID")
 CLIENT_SECRET = os.getenv("YANDEX_CLIENT_SECRET")
-REDIRECT_URI = "http://2.27.32.103:8000/auth/callback"
+REDIRECT_URI = os.getenv("REDIRECT_URI")
 
 YANDEX_AUTH_URL = "https://oauth.yandex.ru/authorize"
 YANDEX_TOKEN_URL = "https://oauth.yandex.ru/token"
