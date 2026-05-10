@@ -95,3 +95,7 @@
 </div>
 {% endif %}
 {% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
+{% endblock %}

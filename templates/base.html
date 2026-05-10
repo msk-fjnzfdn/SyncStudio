@@ -16,6 +16,9 @@
     <a href="/dashboard" class="logo">sync<span>studio</span></a>
     <nav class="topbar-nav">
       <a href="/dashboard">комнаты</a>
+      {% if is_admin %}
+      <a href="/admin" class="btn-admin" style="color: var(--green); font-weight: bold;">админка</a>
+      {% endif %}
       <a href="/auth/logout" class="btn-logout">выйти</a>
     </nav>
   </header>

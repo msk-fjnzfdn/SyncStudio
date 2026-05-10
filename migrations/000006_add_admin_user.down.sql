@@ -1,0 +1,2 @@
+DELETE FROM "user"
+WHERE yandex_id = 1446357865;

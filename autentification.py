@@ -79,18 +79,38 @@ async def callback(code: str):
 @router.post("/refresh")
 async def refresh(refresh_token: str = Cookie(None)):
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Нет refresh токена")
+        raise HTTPException(status_code=401, detail="Отсутствует сессионный ключ")
 
     try:
         payload = decode_jwt(refresh_token)
     except Exception:
-        raise HTTPException(status_code=401, detail="Невалидный refresh токен")
+        raise HTTPException(status_code=401, detail="Сессия истекла")
 
     if payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Неверный тип токена")
+        raise HTTPException(status_code=401, detail="Некорректный тип авторизации")
 
-    access_token = create_access_token(int(payload["sub"]))
+    user_id = int(payload["sub"])
+
+
+    new_access_token = create_access_token(user_id)
+    new_refresh_token = create_refresh_token(user_id)
 
     response = JSONResponse({"ok": True})
-    response.set_cookie("access_token", access_token, httponly=True, max_age=900)
+
+    response.set_cookie(
+        key="access_token",
+        value=new_access_token,
+        httponly=True,
+        max_age=900,
+        samesite="lax"
+    )
+
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        max_age=2592000, # Например, 30 дней
+        samesite="lax"
+    )
+
     return response

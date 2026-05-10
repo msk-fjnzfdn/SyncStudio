@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ error_code | default('Ошибка') }} — {{ error_title | default('Что-то пошло не так') }}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #09090b;
+      --text: #fafafa;
+      --text2: #a1a1aa;
+      --text3: #52525b;
+      --border: #27272a;
+      --border2: #3f3f46;
+      --green: {{ theme_color | default('#39d353') }};
+      --err-red: rgba(232, 85, 85, 0.8);
+      --sans: 'Syne', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+      --radius: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow: hidden;
+    }
+
+    /* Background effects */
+    .notfound-wrap::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+              linear-gradient(rgba(57, 211, 83, 0.02) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(57, 211, 83, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+
+    .notfound-glow {
+      position: fixed;
+      width: 60vw;
+      height: 60vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(57, 211, 83, 0.05) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      animation: breathe 8s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+      50%       { transform: translate(-50%, -50%) scale(1.1); opacity: 0.4; }
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    /* 404 / 500 Number */
+    .error-code {
+      font-size: clamp(8rem, 25vw, 16rem);
+      font-weight: 800;
+      line-height: 0.8;
+      letter-spacing: -0.05em;
+      color: transparent;
+      -webkit-text-stroke: 1px var(--border2);
+      margin-bottom: 1rem;
+      user-select: none;
+    }
+
+    .error-tag {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--green);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .error-title {
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .error-message {
+      font-size: 0.9rem;
+      color: var(--text2);
+      max-width: 450px;
+      line-height: 1.6;
+      margin-bottom: 2.5rem;
+    }
+
+    code {
+      font-family: var(--mono);
+      color: var(--green);
+      background: rgba(57, 211, 83, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      border: none;
+    }
+    .btn-primary:hover { background: #56e875; transform: translateY(-2px); }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--text2);
+    }
+    .btn-secondary:hover { border-color: var(--green); color: var(--text); }
+
+    /* Console Trace */
+    .trace-block {
+      margin-top: 4rem;
+      width: 100%;
+      max-width: 500px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text3);
+      overflow-x: auto;
+    }
+
+    .trace-header {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 1rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); }
+
+    .line { display: block; margin-bottom: 4px; white-space: nowrap; }
+    .line.err { color: var(--err-red); }
+    .line.ok { color: var(--green); opacity: 0.7; }
+
+    .cursor {
+      display: inline-block;
+      width: 7px;
+      height: 1.1em;
+      background: var(--green);
+      margin-left: 5px;
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .container { animation: fadeUp 0.6s ease-out; }
+  </style>
+</head>
+<body class="notfound-wrap">
+<div class="notfound-glow"></div>
+
+<div class="container">
+  <div class="error-code">{{ error_code | default('404') }}</div>
+  <div class="error-tag">// {{ error_tag | default('SYSTEM_FAILURE') }}</div>
+
+  <h1 class="error-title">{{ error_title | default('Доступ ограничен') }}<span class="cursor"></span></h1>
+
+  <p class="error-message">
+    {% if error_description %}
+    {{ error_description }}
+    {% else %}
+    Запрошенный ресурс <code>{{ request_path | default('/') }}</code> недоступен или не существует.
+    {% endif %}
+  </p>
+
+  <div class="actions">
+    <a href="{{ home_url | default('/') }}" class="btn btn-primary">→ терминал</a>
+    <button class="btn btn-secondary" onclick="history.back()">← вернуться</button>
+  </div>
+
+  <div class="trace-block">
+    <div class="trace-header">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <span class="line err">✕ [{{ error_code | default('ERR') }}] Исключение в модуле {{ request_path | default('router') }}</span>
+    <span class="line">timestamp: {{ timestamp | default('now') }}</span>
+    <span class="line">client_ip: {{ client_ip | default('127.0.0.1') }}</span>
+    {% if debug_message %}
+    <span class="line warn">⚠ {{ debug_message }}</span>
+    {% endif %}
+    <span class="line ok">✓ Ожидание команды пользователя...</span>
+  </div>
+</div>
+</body>
+</html>

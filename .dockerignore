@@ -1,0 +1,10 @@
+uploads/*
+.env
+.venv
+.git
+docs/*
+pyrightconfig.json
+.gitignore
+__pycache__
+.idea
+Makefile

@@ -15,7 +15,7 @@ router = APIRouter(prefix="/room", tags=["room"])
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_room(room_data: RoomCreate, user_id: int = Depends(get_current_user)):
     async with get_conn() as conn:
-        if await queries.is_user_staff(conn, user_id=user_id):
+        if (await queries.is_user_staff(conn, user_id=user_id))[0]:
             room = await queries.create_room(
                 conn,
                 name=room_data.name,
@@ -63,7 +63,7 @@ async def add_file(
 
     # Определяем от чьего имени сохраняем
     async with get_conn() as conn:
-        role = queries.is_user_staff(conn, user_id=user_id)
+        role = (await queries.is_user_staff(conn, user_id=user_id))[0]
 
     if target_user_id and target_user_id != user_id:
         # Только учитель может сохранять чужой файл
@@ -97,7 +97,7 @@ async def add_user_to_room(
         user_id: int = Depends(get_current_user),
 ):
     async with get_conn() as conn:
-        if not await queries.is_user_staff(conn, user_id=user_id):
+        if not (await queries.is_user_staff(conn, user_id=user_id))[0]:
             raise HTTPException(403, "Нет прав")
 
         room = await queries.get_room_by_id(conn, room_id=room_id)
@@ -126,7 +126,7 @@ async def update_room_settings(
         user_id: int = Depends(get_current_user),
 ):
     async with get_conn() as conn:
-        if not await queries.is_user_staff(conn, user_id=user_id):
+        if not (await queries.is_user_staff(conn, user_id=user_id))[0]:
             raise HTTPException(403, "Нет прав")
 
         room = await queries.get_room_by_id(conn, room_id=room_id)
@@ -151,7 +151,7 @@ async def delete_room(
         user_id: int = Depends(get_current_user),
 ):
     async with get_conn() as conn:
-        if not await queries.is_user_staff(conn, user_id=user_id):
+        if not (await queries.is_user_staff(conn, user_id=user_id))[0]:
             raise HTTPException(403, "Нет прав")
 
         room = await queries.get_room_by_id(conn, room_id=room_id)
@@ -171,7 +171,7 @@ async def get_room_settings(
         user_id: int = Depends(get_current_user),
 ):
     async with get_conn() as conn:
-        if not await queries.is_user_staff(conn, user_id=user_id):
+        if not (await queries.is_user_staff(conn, user_id=user_id))[0]:
             raise HTTPException(403, "Нет прав")
 
         members = await queries.get_room_members(conn, room_id=room_id)

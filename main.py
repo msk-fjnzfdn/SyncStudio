@@ -1,8 +1,13 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, Cookie
+from datetime import datetime
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, Cookie, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 from contextlib import asynccontextmanager
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exception_handlers import http_exception_handler
+import asyncpg
 
 from database import init_pool, close_pool, get_conn, queries
 import autentification
@@ -30,6 +35,34 @@ app.include_router(room.router)
 
 # ── Page routes ───────────────────────────────────────────────
 
+
+@app.exception_handler(404)
+async def not_found_exception_handler(request: Request, exc):
+    return templates.TemplateResponse(request, '404.html',{
+        "request": request,
+        "error_code": "404",
+        "error_tag": "STATUS.NOT_FOUND",
+        "error_title": "Путь не найден",
+        "request_path": request.url.path,
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "home_url": "/dashboard"
+    }, status_code=404)
+
+@app.exception_handler(500)
+async def server_error_handler(request: Request, exc):
+    return templates.TemplateResponse(request, '404.html', {
+        "request": request,
+        "error_code": "500",
+        "error_tag": "CRITICAL_SERVER_ERR",
+        "error_title": "Ошибка ядра",
+        "error_description": "Произошел критический сбой на стороне сервера. Мы уже работаем над восстановлением доступа.",
+        "debug_message": str(exc), # Только для режима разработки!
+        "theme_color": "#e85555"
+    }, status_code=500)
+
+@app.exception_handler(401)
+async def redirect_to_login(request: Request, exc):
+    return RedirectResponse('/')
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -65,8 +98,8 @@ async def dashboard(request: Request):
         is_admin_row = await queries.is_user_admin(conn, user_id=user_id)
         user_data = await queries.get_user_by_id(conn, id=user_id)
 
-    is_staff = bool(is_staff_row and is_staff_row["is_staff"])
-    is_admin = bool(is_admin_row and is_admin_row["is_superuser"])
+    is_staff = bool(is_staff_row[0] and is_staff_row["is_staff"])
+    is_admin = bool(is_admin_row[0] and is_admin_row["is_superuser"])
 
     return templates.TemplateResponse(
         request,
@@ -79,6 +112,70 @@ async def dashboard(request: Request):
             "is_admin": is_admin,
         },
     )
+
+
+@app.get("/admin")
+async def admin(request: Request, user_id: int = Depends(get_current_user)):
+    async with get_conn() as conn:
+        is_admin = await queries.is_user_admin(conn, user_id=user_id)
+
+    if not is_admin[0]:
+        raise HTTPException(status_code=404, detail='Такой страницы не существует')
+
+    return templates.TemplateResponse(
+        request,
+        "admin.html",
+        {'request': request, 'is_admin': True}
+    )
+
+@app.get("/all_users")
+async def users(request: Request, user_id: int = Depends(get_current_user)):
+    async with get_conn() as conn:
+        is_admin = await queries.is_user_admin(conn, user_id=user_id)
+        if not is_admin[0]:
+            raise HTTPException(status_code=404, detail='Такой страницы не существует')
+
+        all_users_gen = queries.get_all_users(conn)
+        all_users = [u async for u in all_users_gen]
+    return all_users
+
+
+@app.patch("/change_user_role")
+async def change_user_role(request: Request, target: int, role: str, user_id: int = Depends(get_current_user)):
+    async with get_conn() as conn:
+        if not (await queries.is_user_admin(conn, user_id=user_id))[0]:
+            raise HTTPException(status_code=404, detail='Такой страницы не существует')
+        try:
+            async with conn.transaction():
+                id = await queries.change_user_role(conn, user_id=target, role=role)
+                if id == 'UPDATE 0':
+                    raise HTTPException(status_code=500, detail='nternal server error')
+
+            return {"status": "success"}
+        except asyncpg.IntegrityConstraintViolationError:
+            raise HTTPException(status_code=400, detail=f"Role '{role}' does not exist")
+        except Exception as e:
+            print(f"Database error: {e}")
+            raise HTTPException(status_code=500, detail='Internal server error')
+
+
+
+@app.delete("/delete_user")
+async def delete_user(request: Request, target: int, user_id: int = Depends(get_current_user)):
+    async with get_conn() as conn:
+        is_admin = await queries.is_user_admin(conn, user_id=user_id)
+        if not is_admin[0]:
+            raise HTTPException(status_code=404, detail='Такой страницы не существует')
+
+        try:
+            async with conn.transaction():
+                print(f"DEBUG: target value is {target} type {type(target)}")
+                # await queries.delete_user(conn, target=target)
+                await conn.execute('DELETE FROM "user" WHERE id = $1', target)
+        except Exception as e:
+            print(f"Database error: {e}")
+            raise HTTPException(status_code=500, detail='Internal server error')
+
 
 
 @app.get("/room/{room_id}", response_class=HTMLResponse)
@@ -97,11 +194,12 @@ async def room_page(request: Request, room_id: int):
         is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
         room_data = await queries.get_room_by_id(conn, room_id=room_id)
         user_data = await queries.get_user_by_id(conn, id=user_id)
+        is_admin = (await queries.is_user_admin(conn, user_id=user_id))[0]
 
     if not room_data:
         return RedirectResponse("/dashboard")
 
-    is_staff = bool(is_staff_row and is_staff_row["is_staff"])
+    is_staff = bool(is_staff_row[0] and is_staff_row["is_staff"])
     role = "teacher" if is_staff else "student"
 
     return templates.TemplateResponse(
@@ -114,6 +212,7 @@ async def room_page(request: Request, room_id: int):
             "role": role,
             "user_id": user_id,
             "username": user_data["username"] if user_data else str(user_id),
+            'is_admin': is_admin
         },
     )
 
@@ -166,7 +265,7 @@ async def room_settings_page(request: Request, room_id: int):
 
     async with get_conn() as conn:
         is_staff_row = await queries.is_user_staff(conn, user_id=user_id)
-        if not (is_staff_row and is_staff_row["is_staff"]):
+        if not (is_staff_row[0] and is_staff_row["is_staff"]):
             return RedirectResponse("/dashboard")
         room = await queries.get_room_by_id(conn, room_id=room_id)
         if not room:

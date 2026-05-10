@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncStudio — Админ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+</head>
+<body>
+<div class="noise"></div>
+
+<header class="topbar">
+  <a href="/dashboard" class="logo">sync<span>studio</span></a>
+  <nav class="topbar-nav">
+    <a href="/dashboard">комнаты</a>
+    <span class="topbar-divider">/</span>
+    <span class="topbar-current">админка</span>
+    <a href="/auth/logout" class="btn-logout">выйти</a>
+  </nav>
+</header>
+
+<main>
+  <div class="admin-wrap">
+    <div class="admin-header">
+      <div>
+        <span class="page-tag">// SYSTEM.ADMIN</span>
+        <h1 class="page-title">Управление пользователями</h1>
+      </div>
+      <div class="admin-stats">
+        <div class="stat-chip">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">всего</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-value cap-green" id="stat-admins">0</span>
+          <span class="stat-label">admins</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-value" style="color:var(--amber)" id="stat-staff">0</span>
+          <span class="stat-label">staff</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-value" style="color:var(--blue)" id="stat-users">0</span>
+          <span class="stat-label">users</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" class="search-input" placeholder="поиск по имени или email..." autocomplete="off">
+      </div>
+      <div class="filter-btns">
+        <button class="filter-btn active" data-role="all">все</button>
+        <button class="filter-btn" data-role="admin">admin</button>
+        <button class="filter-btn" data-role="staff">staff</button>
+        <button class="filter-btn" data-role="user">user</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="users-table">
+        <thead>
+        <tr>
+          <th class="col-idx">#</th>
+          <th class="col-user">пользователь</th>
+          <th class="col-email">email</th>
+          <th class="col-role">роль</th>
+          <th class="col-joined">дата входа</th>
+          <th class="col-actions">действия</th>
+        </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+      <div class="table-empty" id="table-empty" style="display:none">
+        <div class="empty-icon">◌◌◌</div>
+        <div>пользователи не найдены</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-tag">// CONFIRM.DELETE</span>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-question">Удалить пользователя?</p>
+      <p class="modal-user-preview" id="modal-user-name">—</p>
+      <p class="modal-warn">Это действие необратимо. Все данные будут удалены.</p>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" id="modal-cancel-btn">отмена</button>
+      <button class="btn-delete-confirm" id="modal-confirm-btn">удалить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="role-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-tag tag-role">// CONFIRM.ROLE_CHANGE</span>
+      <button class="modal-close" id="role-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-question">Изменить роль?</p>
+      <div class="modal-user-preview" id="role-modal-preview">—</div>
+      <p class="modal-warn">Права доступа пользователя будут немедленно изменены.</p>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" id="role-modal-cancel">отмена</button>
+      <button class="btn-confirm-role" id="role-modal-confirm">подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="{{ url_for('static', path='js/admin.js') }}"></script>
+</body>
+</html>

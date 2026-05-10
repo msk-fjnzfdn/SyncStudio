@@ -54,3 +54,21 @@ SELECT r.is_staff
 FROM "user" u
          JOIN role r ON u.role_id = r.id
 WHERE u.id = :user_id;
+
+
+-- name: get_all_users()
+select u.id, u.email, u.username, r.name as role, u.created_at
+from "user" u
+join role r on u.role_id = r.id
+order by u.created_at;
+
+
+-- name: change_user_role(role, user_id)!
+update "user" u
+set role_id = (select id from role where lower(name) = lower(:role))
+where u.id = :user_id
+returning id;
+
+-- name: delete_user(target)!
+delete from "user"
+where id = :target;

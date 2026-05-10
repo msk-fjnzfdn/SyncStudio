@@ -64,4 +64,15 @@ create trigger room_update_trigger
 execute procedure set_updated_columns();
 
 
+insert into role (name, is_superuser, is_staff)
+values ('admin', true, true)
+    on conflict (name) do nothing;
+
+insert into role (name, is_superuser, is_staff)
+values ('staff', false, true)
+    on conflict (name) do nothing;
+
+insert into role (name, is_superuser, is_staff)
+values ('user', false, false)
+    on conflict (name) do nothing;
 
