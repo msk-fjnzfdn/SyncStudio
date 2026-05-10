@@ -212,6 +212,31 @@
         }
         break;
 
+      // ── Ученик получает вывод от запуска своего кода учителем ──
+      case 'teacher_student_output':
+        if (ROLE === 'student' && msg.student_id === USER_ID) {
+          // Показываем вывод прямо в своей панели
+          const ownOut = document.getElementById('ownOutputContent');
+          if (ownOut) {
+            ownOut.className   = msg.success ? 'output-content success' : 'output-content error';
+            ownOut.textContent = msg.output || (msg.success ? '(нет вывода)' : '(ошибка без сообщения)');
+          }
+          window.showToast('▶ учитель запустил ваш код', msg.success ? 'success' : 'error');
+        }
+        break;
+
+      // ── Ученик получает вывод от запуска кода учителем (его собственный код) ──
+      case 'teacher_own_output':
+        if (ROLE === 'student') {
+          const teacherOut = document.getElementById('teacherOutputContent');
+          if (teacherOut) {
+            teacherOut.className   = msg.success ? 'output-content success' : 'output-content error';
+            teacherOut.textContent = msg.output || (msg.success ? '(нет вывода)' : '(ошибка без сообщения)');
+          }
+          window.showToast('▶ учитель запустил свой код', '');
+        }
+        break;
+
       // ── Учитель начал наблюдать — блокируем ученика ──
       case 'teacher_watching':
         if (ROLE === 'student' && editors.own) {
@@ -231,10 +256,14 @@
       // ── Учитель получает вывод консоли ученика ──
       case 'student_console_output':
         if (ROLE === 'teacher') {
-          const studentOut = document.getElementById('studentOutputContent');
-          if (studentOut) {
-            studentOut.className  = msg.success ? 'output-content success' : 'output-content error';
-            studentOut.textContent = msg.output || (msg.success ? '(нет вывода)' : '(ошибка без сообщения)');
+          if (msg.student_id === viewingStudentId) {
+            const studentOut = document.getElementById('studentOutputContent');
+            if (studentOut) {
+              studentOut.className  = msg.success ? 'output-content success' : 'output-content error';
+              studentOut.textContent = msg.output || (msg.success ? '(нет вывода)' : '(ошибка без сообщения)');
+            }
+          } else {
+            window.showToast(`▶ ${msg.student_id} запустил код`, msg.success ? 'success' : 'error');
           }
         }
         break;
@@ -323,38 +352,44 @@
   document.getElementById('stopViewBtn')?.addEventListener('click', stopViewingStudent);
 
   // ── Run code ───────────────────────────────────────────────
-  async function runCode(code, lang, outputEl, sendConsole = false) {
-    if (!outputEl) return;
-    outputEl.className  = 'output-content running';
+  async function runCode(code, lang, outputEl) {
+    if (!outputEl) return null;
+    outputEl.className   = 'output-content running';
     outputEl.textContent = '⟳ выполняется...';
-
     const result = await window.codeRunner.run(code, lang);
-    outputEl.className  = result.success ? 'output-content success' : 'output-content error';
+    outputEl.className   = result.success ? 'output-content success' : 'output-content error';
     outputEl.textContent = result.output || (result.success ? '(нет вывода)' : '(ошибка без сообщения)');
-
-    // Ученик отправляет вывод учителю (если тот наблюдает)
-    if (sendConsole) {
-      sendJson({
-        type: 'console_output',
-        output: result.output || (result.success ? '(нет вывода)' : '(ошибка без сообщения)'),
-        success: result.success,
-      });
-    }
+    return result;
   }
 
-  // Запуск своего кода (учитель и ученик)
-  document.getElementById('runOwnBtn')?.addEventListener('click', () => {
+  // Ученик (или учитель для своего кода) нажимает Run
+  document.getElementById('runOwnBtn')?.addEventListener('click', async () => {
     if (!editors.own) return;
-    const out = document.getElementById('ownOutputContent');
-    // Ученик передаёт консоль серверу; учитель — нет
-    runCode(editors.own.getValue(), currentLang, out, ROLE === 'student');
+    const out    = document.getElementById('ownOutputContent');
+    const result = await runCode(editors.own.getValue(), currentLang, out);
+    if (!result) return;
+    const outputText = result.output || (result.success ? '(нет вывода)' : '(ошибка без сообщения)');
+    if (ROLE === 'student') {
+      // Ученик → учителю
+      sendJson({ type: 'console_output', output: outputText, success: result.success });
+    } else {
+      // Учитель запустил свой код → broadcast всем ученикам
+      sendJson({ type: 'teacher_own_output', output: outputText, success: result.success });
+    }
   });
 
-  // Учитель запускает код ученика локально
-  document.getElementById('runStudentBtn')?.addEventListener('click', () => {
-    if (!editors.student) return;
-    const out = document.getElementById('studentOutputContent');
-    runCode(editors.student.getValue(), viewingStudentLang, out, false);
+  // Учитель запускает код ученика → шлёт вывод только этому ученику
+  document.getElementById('runStudentBtn')?.addEventListener('click', async () => {
+    if (!editors.student || !viewingStudentId) return;
+    const out    = document.getElementById('studentOutputContent');
+    const result = await runCode(editors.student.getValue(), viewingStudentLang, out);
+    if (!result) return;
+    sendJson({
+      type:       'teacher_student_output',
+      student_id: viewingStudentId,
+      output:     result.output || (result.success ? '(нет вывода)' : '(ошибка без сообщения)'),
+      success:    result.success,
+    });
   });
 
   // ── Save file (PATCH /room/add_file) ─────────────────────

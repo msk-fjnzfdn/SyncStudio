@@ -147,6 +147,34 @@ class RoomManager:
                 except Exception:
                     pass
 
+        elif msg_type == "teacher_own_output":
+            # Учитель запустил свой код — broadcast всем ученикам
+            await self._broadcast_to_students(
+                room,
+                {
+                    "type": "teacher_own_output",
+                    "output": data.get("output", ""),
+                    "success": data.get("success", True),
+                },
+            )
+
+        elif msg_type == "teacher_student_output":
+            # Учитель запустил код конкретного ученика — шлём только ему
+            student_id = data.get("student_id", "")
+            student = room["students"].get(student_id)
+            if student:
+                try:
+                    await student["ws"].send_json(
+                        {
+                            "type": "teacher_student_output",
+                            "student_id": student_id,
+                            "output": data.get("output", ""),
+                            "success": data.get("success", True),
+                        }
+                    )
+                except Exception:
+                    pass
+
         elif msg_type == "stop_viewing":
             prev_id = room["teacher_viewing"]
             room["teacher_viewing"] = None
@@ -192,12 +220,13 @@ class RoomManager:
                     pass
 
         elif msg_type == "console_output":
-            # Пересылаем вывод консоли учителю если он смотрит на этого ученика
-            if room["teacher_viewing"] == student_id and room["teacher_ws"]:
+            # Пересылаем вывод консоли учителю всегда (он сам решит, показывать или нет)
+            if room["teacher_ws"]:
                 try:
                     await room["teacher_ws"].send_json(
                         {
                             "type": "student_console_output",
+                            "student_id": student_id,
                             "output": data.get("output", ""),
                             "success": data.get("success", True),
                         }

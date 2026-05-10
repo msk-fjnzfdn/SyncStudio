@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, Cookie, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from contextlib import asynccontextmanager
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exception_handlers import http_exception_handler
@@ -62,6 +62,11 @@ async def server_error_handler(request: Request, exc):
 
 @app.exception_handler(401)
 async def redirect_to_login(request: Request, exc):
+    if request.url.path.startswith("/room") or request.url.path.startswith("/auth"):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"}
+        )
     return RedirectResponse('/')
 
 @app.get("/", response_class=HTMLResponse)
@@ -172,6 +177,7 @@ async def delete_user(request: Request, target: int, user_id: int = Depends(get_
                 print(f"DEBUG: target value is {target} type {type(target)}")
                 # await queries.delete_user(conn, target=target)
                 await conn.execute('DELETE FROM "user" WHERE id = $1', target)
+                await conn.execute('DELETE FROM room_user WHERE user_id = $1', target)
         except Exception as e:
             print(f"Database error: {e}")
             raise HTTPException(status_code=500, detail='Internal server error')

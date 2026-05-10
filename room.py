@@ -2,6 +2,7 @@ import shutil
 from typing import Optional
 import pathlib
 
+import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Path
 from fastapi.responses import FileResponse
 
@@ -81,8 +82,8 @@ async def add_file(
     upload_path.mkdir(parents=True, exist_ok=True)
     file_location = upload_path / f'user_{save_as_user_id}'
 
-    with open(file_location, "wb") as buffer:
-        buffer.write(content)
+    async with aiofiles.open(file_location, "wb") as out_file:
+        await out_file.write(content)
 
     async with get_conn() as conn:
         queries.add_file_to_room(conn, path_to_file=str(file_location), user_id=save_as_user_id, room_id=room_id)
@@ -209,4 +210,4 @@ async def get_file(
     if not file_location.exists():
         raise HTTPException(status_code=404, detail="Файл не найден")
 
-    return FileResponse(path=file_location, filename=f'user_{user_id}')
+    return FileResponse(path=file_location, filename=f'user_{user_id}', headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
