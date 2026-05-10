@@ -10,11 +10,11 @@ pool: asyncpg.Pool | None = None
 async def init_pool():
     global pool
     pool = await asyncpg.create_pool(
-        host="localhost",
+        host="db",
         port=5432,
         user="postgres",
         password="postgres",
-        database="sync-studio",
+        database="syncstudio",
         min_size=2,
         max_size=10
     )
