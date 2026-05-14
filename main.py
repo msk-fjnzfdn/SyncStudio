@@ -10,7 +10,8 @@ from fastapi.exception_handlers import http_exception_handler
 import asyncpg
 
 from database import init_pool, close_pool, get_conn, queries
-import autentification
+from starlette.middleware.wsgi import WSGIMiddleware
+from autentification import flask_app
 import room
 from room_manager import RoomManager
 from dependencies import get_current_user
@@ -29,7 +30,8 @@ app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.include_router(autentification.router)
+app.mount("/auth", WSGIMiddleware(flask_app))
+app.mount("/admin", WSGIMiddleware(flask_app))
 app.include_router(room.router)
 
 
